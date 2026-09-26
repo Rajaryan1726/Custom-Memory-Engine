@@ -4,18 +4,39 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 import config from '../src/config/index.js';
 import { openai } from '../src/llm/client.js';
 import { createMemoryEngine } from '../src/memory/MemoryEngine.js';
-import { DECIDER_PROMPT } from '../src/memory/prompts.js';
+import { extractFacts } from '../src/memory/extractor.js';
+import { DECIDER_PROMPT, EXTRACTION_PROMPT } from '../src/memory/prompts.js';
 import { listCollections, saveResult, stats, timed } from './eval-utils.js';
 
 const COLLECTION = 'custom_user_memories_update_eval';
 
-// ---- instrumentation: decider calls and fallbacks ----------------------------
+// ---- focused mode -----------------------------------------------------------
+// npm run eval:update:9a  ->  --only=9a,9b, repeated EVAL_RUNS times (default 5).
+// The count comes from an env var because PowerShell drops "--" in "npm run x -- --flag".
+const onlyArg = process.argv.find((a) => a.startsWith('--only='));
+const ONLY = onlyArg ? onlyArg.slice('--only='.length).split(',').map((x) => x.trim()).filter(Boolean) : null;
+const RUNS = ONLY ? Number.parseInt(process.env.EVAL_RUNS ?? '5', 10) : 1;
+if (!Number.isInteger(RUNS) || RUNS < 1) throw new Error(`EVAL_RUNS must be a positive integer, got "${process.env.EVAL_RUNS}"`);
+
+// ---- instrumentation: decider calls, fallbacks, raw extractor/decider output ----
 let deciderCalls = 0;
 const fallbacks = [];
+const llmTrace = []; // { kind: 'extractor' | 'decider', output }
 const origCreate = openai.chat.completions.create.bind(openai.chat.completions);
 openai.chat.completions.create = async (...args) => {
-  if (args[0]?.messages?.[0]?.content === DECIDER_PROMPT) deciderCalls++;
-  return origCreate(...args);
+  const system = args[0]?.messages?.[0]?.content;
+  if (system === DECIDER_PROMPT) deciderCalls++;
+  const res = await origCreate(...args);
+  if (system === DECIDER_PROMPT || system === EXTRACTION_PROMPT) {
+    let output;
+    try {
+      output = JSON.parse(res.choices?.[0]?.message?.content ?? 'null');
+    } catch {
+      output = res.choices?.[0]?.message?.content;
+    }
+    llmTrace.push({ kind: system === DECIDER_PROMPT ? 'decider' : 'extractor', output });
+  }
+  return res;
 };
 const origWarn = console.warn;
 console.warn = (...args) => {
@@ -33,7 +54,8 @@ async function dropCollection() {
 // ---- helpers ------------------------------------------------------------------
 const engine = createMemoryEngine({ collection: COLLECTION });
 const RUN = `r${Date.now().toString(36)}`;
-const uid = (name) => `${RUN}_${name}`;
+let REP = 1; // repetition number in focused mode, so each repetition uses fresh users
+const uid = (name) => `${RUN}_${REP}_${name}`;
 const MODULE_RE = /\bmodule\s*\d+/i;
 
 function fmtEvents(results) {
@@ -53,11 +75,24 @@ function scenario(name, fn) {
 
 async function say(log, userId, content, metadata) {
   const messages = typeof content === 'string' ? [{ role: 'user', content }] : content;
+  const traceStart = llmTrace.length;
   const { results } = await engine.add(messages, { userId, metadata });
   const shown = typeof content === 'string' ? content : content.map((m) => `${m.role}: ${m.content}`).join(' / ');
-  log.push({ input: shown, events: results.map(({ event, text, previousText }) => ({ event, text, previousText })) });
+  // Trace attribution is exact for sequential add() calls (all scenarios except the parallel one).
+  const trace = llmTrace.slice(traceStart);
+  log.push({
+    input: shown,
+    events: results.map(({ event, text, previousText }) => ({ event, text, previousText })),
+    extracted: trace.filter((t) => t.kind === 'extractor').map((t) => t.output?.facts ?? t.output),
+    decider: trace.filter((t) => t.kind === 'decider').map((t) => t.output?.actions ?? t.output),
+  });
   return results;
 }
+
+const fmtFacts = (facts) =>
+  Array.isArray(facts) && facts.length
+    ? facts.map((f) => `[${f.category}] (${f.status ?? 'active'}) ${f.text}`).join(' | ')
+    : '(none)';
 
 const mems = async (userId) => (await engine.getAll({ userId })).results;
 
@@ -70,14 +105,24 @@ const SCENARIOS = [
     await say(log, u, 'Ab main Module 3 pe aa gaya hoon', { sessionId: 'session_2' });
     const modules = (await mems(u)).filter((m) => MODULE_RE.test(m.text));
     const m = modules[0];
+    const hist = m ? await engine.history(m.id, { userId: u }) : null;
+    const histOk =
+      Array.isArray(hist) &&
+      hist.length === 2 &&
+      hist[0].event === 'ADD' && /module 2\b/i.test(hist[0].text) && hist[0].sessionId === 'session_1' &&
+      hist[1].event === 'UPDATE' && /module 3\b/i.test(hist[1].text) && hist[1].sessionId === 'session_2';
     const pass =
       modules.length === 1 &&
       /module 3\b/i.test(m.text) &&
       m.metadata?.sessionId === 'session_2' &&
-      m.createdAt === createdAt;
+      m.createdAt === createdAt &&
+      histOk;
     return {
       pass,
-      detail: modules.map((x) => `${x.text}  metadata=${JSON.stringify(x.metadata)}  createdAt unchanged=${x.createdAt === createdAt}`),
+      detail: [
+        ...modules.map((x) => `${x.text}  metadata=${JSON.stringify(x.metadata)}  createdAt unchanged=${x.createdAt === createdAt}`),
+        `history: ${(hist ?? []).map((h) => `${h.event} "${h.text}" (${h.sessionId})`).join(' -> ')}`,
+      ],
     };
   }),
 
@@ -132,8 +177,23 @@ const SCENARIOS = [
     const second = await say(log, u, 'ab DP clear ho gaya');
     const all = await mems(u);
     const dpWeak = all.filter((m) => m.category === 'weak_topic' && /\bDP\b|dynamic programming/i.test(m.text));
-    const pass = dpWeak.length === 0 && second.some((r) => r.event === 'DELETE');
-    return { pass, detail: all.map((m) => `[${m.category}] ${m.text}`) };
+    const archived = (await engine.getAll({ userId: u, includeArchived: true })).results.filter(
+      (m) => m.state === 'archived' && /\bDP\b|dynamic programming/i.test(m.text)
+    );
+    const pass =
+      dpWeak.length === 0 &&
+      second.some((r) => r.event === 'DELETE') &&
+      archived.length === 1 &&
+      typeof archived[0].archivedReason === 'string' &&
+      archived[0].archivedReason.length > 0 &&
+      Boolean(archived[0].archivedAt);
+    return {
+      pass,
+      detail: [
+        ...all.map((m) => `[${m.category}] ${m.text}`),
+        ...archived.map((m) => `archived: "${m.text}"  reason="${m.archivedReason}"  at=${m.archivedAt}`),
+      ],
+    };
   }),
 
   scenario('7. Ended fact with nothing stored', async (log) => {
@@ -228,6 +288,39 @@ const SCENARIOS = [
     };
   }),
 
+  scenario('15. restore brings an archived memory back', async (log) => {
+    const u = uid('s15');
+    await say(log, u, 'DP mein bahut dikkat hai');
+    await say(log, u, 'ab DP clear ho gaya');
+    const archived = (await engine.getAll({ userId: u, includeArchived: true })).results.find((m) => m.state === 'archived');
+    const hiddenBefore = !(await mems(u)).some((m) => m.id === archived?.id);
+    const restored = archived ? await engine.restore(archived.id, { userId: u }) : null;
+    const visibleAfter = (await mems(u)).find((m) => m.id === archived?.id);
+    const hist = archived ? await engine.history(archived.id, { userId: u }) : [];
+    const events = (hist ?? []).map((h) => h.event);
+    const pass =
+      Boolean(archived) &&
+      hiddenBefore &&
+      restored?.state === 'active' &&
+      visibleAfter?.state === 'active' &&
+      visibleAfter.archivedReason === undefined &&
+      events.join(',') === 'ADD,ARCHIVE,RESTORE';
+    return { pass, detail: [`visible after restore: ${visibleAfter?.text ?? '(no)'}`, `history: ${events.join(' -> ')}`] };
+  }),
+
+  scenario('16. engine.delete removes a memory completely (archived one)', async (log) => {
+    const u = uid('s16');
+    await say(log, u, 'DP mein bahut dikkat hai');
+    await say(log, u, 'ab DP clear ho gaya');
+    const archived = (await engine.getAll({ userId: u, includeArchived: true })).results.find((m) => m.state === 'archived');
+    if (archived) await engine.delete(archived.id, { userId: u });
+    const stillThere = (await engine.getAll({ userId: u, includeArchived: true })).results.some((m) => m.id === archived?.id);
+    const hist = archived ? await engine.history(archived.id, { userId: u }) : 'n/a';
+    const got = archived ? await engine.get(archived.id, { userId: u, includeArchived: true }) : 'n/a';
+    const pass = Boolean(archived) && !stillThere && hist === null && got === null;
+    return { pass, detail: [`in includeArchived: ${stillThere}, history: ${JSON.stringify(hist)}, get: ${JSON.stringify(got)}`] };
+  }),
+
   scenario('14 (extra). Two parallel add() calls, same user, same fact', async (log) => {
     const u = uid('s14');
     await Promise.all([
@@ -256,6 +349,64 @@ async function latency() {
     repeatDecider += deciderCalls - calls;
   }
   return { first: stats(first), repeat: stats(repeat), firstDeciderCalls: firstDecider, repeatDeciderCalls: repeatDecider, n: N };
+}
+
+// ---- focused mode: repeat selected scenarios ---------------------------------
+const NINE_A_FOLLOW_UP = [{ role: 'user', content: 'isko detail mein samjhao' }];
+
+async function runFocused() {
+  const selected = SCENARIOS.filter((sc) => ONLY.some((id) => sc.name.startsWith(`${id}.`)));
+  if (selected.length === 0) throw new Error(`--only=${ONLY.join(',')} matched no scenario`);
+  console.log(`Focused run: ${selected.map((sc) => sc.name.split('.')[0]).join(', ')} x ${RUNS} (EVAL_RUNS)\n`);
+
+  const tally = new Map(selected.map((sc) => [sc.name, { pass: 0, fail: 0, failures: [] }]));
+  for (REP = 1; REP <= RUNS; REP++) {
+    for (const sc of selected) {
+      const log = [];
+      let outcome;
+      try {
+        outcome = await sc.fn(log);
+      } catch (err) {
+        outcome = { pass: false, detail: [`ERROR: ${err.message}`] };
+      }
+      const t = tally.get(sc.name);
+      if (outcome.pass) t.pass++;
+      else t.fail++;
+      console.log(`run ${REP}  ${outcome.pass ? 'PASS' : 'FAIL'}  ${sc.name}`);
+      for (const a of log) {
+        console.log(`        add "${a.input}"`);
+        console.log(`          extracted: ${a.extracted.map(fmtFacts).join(' // ') || '(no extractor call)'}`);
+        console.log(`          decider:   ${a.decider.length ? JSON.stringify(a.decider) : '(not called)'}`);
+        console.log(`          events:    ${fmtEvents(a.events)}`);
+      }
+      for (const d of outcome.detail ?? []) console.log(`        state: ${d}`);
+      if (!outcome.pass) t.failures.push({ run: REP, adds: log, detail: outcome.detail });
+    }
+  }
+
+  // The 9a follow-up message through the extractor alone, exactly as add() passes it.
+  console.log(`\nextractFacts alone on ${JSON.stringify(NINE_A_FOLLOW_UP)}, ${RUNS} times:`);
+  const alone = [];
+  for (let i = 1; i <= RUNS; i++) {
+    const facts = await extractFacts(NINE_A_FOLLOW_UP);
+    const hasPreference = facts.some((f) => f.category === 'preference');
+    alone.push({ facts, hasPreference });
+    console.log(`  ${i}: ${hasPreference ? 'PREFERENCE' : 'no preference'}  ${fmtFacts(facts)}`);
+  }
+
+  console.log('\nSummary:');
+  for (const [name, t] of tally) console.log(`  ${name}: ${t.pass} pass, ${t.fail} fail (of ${RUNS})`);
+  console.log(`  extractFacts alone: preference fact in ${alone.filter((a) => a.hasPreference).length}/${RUNS}`);
+  console.log(`  decider fallbacks: ${fallbacks.length}`);
+
+  const file = await saveResult('update-9a', {
+    runAt: new Date().toISOString(),
+    runs: RUNS,
+    scenarios: [...tally].map(([name, t]) => ({ name, ...t })),
+    extractAlone: alone,
+    fallbacks,
+  });
+  console.log(`\nSaved to ${file}`);
 }
 
 // ---- main ---------------------------------------------------------------------
@@ -304,7 +455,7 @@ async function main() {
 }
 
 try {
-  await main();
+  await (ONLY ? runFocused() : main());
 } catch (err) {
   console.error('eval-update failed:', err.message);
   process.exitCode = 1;

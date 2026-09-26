@@ -3,6 +3,14 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 import config from '../config/index.js';
 
 const SCROLL_PAGE_SIZE = 256;
+const HISTORY_LIMIT = 20;
+const ARCHIVED = 'archived';
+
+/** Appends an entry to a payload's history array, keeping the last HISTORY_LIMIT entries. */
+function withHistory(oldHistory, entry) {
+  const history = Array.isArray(oldHistory) ? oldHistory : [];
+  return entry ? [...history, entry].slice(-HISTORY_LIMIT) : history;
+}
 
 function assertUserId(userId) {
   if (typeof userId !== 'string' || !userId.trim()) {
@@ -28,14 +36,23 @@ function assertText(text, label) {
   }
 }
 
-/** Filter that every read, update and delete goes through. */
-function userFilter(userId, { id, category } = {}) {
+/**
+ * Filter that every read, update and delete goes through.
+ * category: a string, or an array meaning "any of".
+ * Archived points are excluded unless includeArchived is true. must_not is used so
+ * points written before the state field existed still count as active.
+ */
+function userFilter(userId, { id, category, includeArchived = false } = {}) {
   const must = [{ key: 'userId', match: { value: userId } }];
   if (id !== undefined) must.push({ has_id: [id] });
-  if (category !== undefined && category !== null) {
+  if (Array.isArray(category)) {
+    if (category.length) must.push({ key: 'category', match: { any: category } });
+  } else if (category !== undefined && category !== null) {
     must.push({ key: 'category', match: { value: category } });
   }
-  return { must };
+  const filter = { must };
+  if (!includeArchived) filter.must_not = [{ key: 'state', match: { value: ARCHIVED } }];
+  return filter;
 }
 
 function toMemory(point, score) {
@@ -47,7 +64,12 @@ function toMemory(point, score) {
     metadata: p.metadata ?? {},
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
+    state: p.state ?? 'active',
   };
+  if (p.state === ARCHIVED) {
+    memory.archivedAt = p.archivedAt ?? null;
+    memory.archivedReason = p.archivedReason ?? null;
+  }
   if (score !== undefined) memory.score = score;
   return memory;
 }
@@ -56,10 +78,13 @@ export function createVectorStore({ collection = config.memory.collection } = {}
   const dim = config.openai.embeddingDim;
   const client = new QdrantClient({ ...config.qdrant, checkCompatibility: false });
 
-  /** Returns the raw point (payload, optionally vector) if it belongs to userId, else null. */
-  async function findOwnedPoint(userId, id, { withVector = false } = {}) {
+  /**
+   * Returns the raw point (payload, optionally vector) if it belongs to userId, else null.
+   * Archived points are only found with includeArchived.
+   */
+  async function findOwnedPoint(userId, id, { withVector = false, includeArchived = false } = {}) {
     const { points } = await client.scroll(collection, {
-      filter: userFilter(userId, { id }),
+      filter: userFilter(userId, { id, includeArchived }),
       limit: 1,
       with_payload: true,
       with_vector: withVector,
@@ -93,7 +118,7 @@ export function createVectorStore({ collection = config.memory.collection } = {}
     }
 
     // Creating an index that already exists is a no-op in Qdrant.
-    for (const field of ['userId', 'category']) {
+    for (const field of ['userId', 'category', 'state']) {
       await client.createPayloadIndex(collection, {
         field_name: field,
         field_schema: 'keyword',
@@ -121,6 +146,8 @@ export function createVectorStore({ collection = config.memory.collection } = {}
           metadata: item.metadata ?? {},
           createdAt: now,
           updatedAt: now,
+          state: 'active',
+          history: withHistory([], item.historyEntry),
         },
       };
     });
@@ -129,13 +156,13 @@ export function createVectorStore({ collection = config.memory.collection } = {}
     return points.map((p) => p.id);
   }
 
-  async function search(userId, vector, { limit = 5, category, scoreThreshold } = {}) {
+  async function search(userId, vector, { limit = 5, category, scoreThreshold, includeArchived = false } = {}) {
     assertUserId(userId);
     assertVector(vector, dim, 'search');
 
     const { points } = await client.query(collection, {
       query: vector,
-      filter: userFilter(userId, { category }),
+      filter: userFilter(userId, { category, includeArchived }),
       limit,
       with_payload: true,
       ...(scoreThreshold !== undefined ? { score_threshold: scoreThreshold } : {}),
@@ -143,21 +170,30 @@ export function createVectorStore({ collection = config.memory.collection } = {}
     return points.map((p) => toMemory(p, p.score));
   }
 
-  async function getById(userId, id) {
+  async function getById(userId, id, { includeArchived = false } = {}) {
     assertUserId(userId);
     assertId(id);
-    const point = await findOwnedPoint(userId, id);
+    const point = await findOwnedPoint(userId, id, { includeArchived });
     return point ? toMemory(point) : null;
   }
 
-  async function getAll(userId, { category } = {}) {
+  /** History entries of a memory (archived or not), or null if it is not this user's. */
+  async function getHistory(userId, id) {
+    assertUserId(userId);
+    assertId(id);
+    const point = await findOwnedPoint(userId, id, { includeArchived: true });
+    if (!point) return null;
+    return Array.isArray(point.payload.history) ? point.payload.history : [];
+  }
+
+  async function getAll(userId, { category, includeArchived = false } = {}) {
     assertUserId(userId);
 
     const all = [];
     let offset;
     do {
       const page = await client.scroll(collection, {
-        filter: userFilter(userId, { category }),
+        filter: userFilter(userId, { category, includeArchived }),
         limit: SCROLL_PAGE_SIZE,
         with_payload: true,
         with_vector: false,
@@ -171,7 +207,7 @@ export function createVectorStore({ collection = config.memory.collection } = {}
     return all.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
   }
 
-  async function updateMemory(userId, id, { text, vector, category, metadata } = {}) {
+  async function updateMemory(userId, id, { text, vector, category, metadata, historyEntry } = {}) {
     assertUserId(userId);
     assertId(id);
     if (text !== undefined) assertText(text, 'updateMemory');
@@ -189,12 +225,14 @@ export function createVectorStore({ collection = config.memory.collection } = {}
 
     const old = existing.payload;
     const payload = {
+      ...old, // keep fields such as state and history
       userId,
       text: text ?? old.text,
       category: category !== undefined ? category : old.category ?? null,
       metadata: metadata !== undefined ? metadata : old.metadata ?? {},
       createdAt: old.createdAt,
       updatedAt: new Date().toISOString(),
+      history: withHistory(old.history, historyEntry),
     };
 
     if (vector !== undefined) {
@@ -213,21 +251,54 @@ export function createVectorStore({ collection = config.memory.collection } = {}
     return toMemory({ id, payload });
   }
 
+  /**
+   * Sets a memory's state ("active" or "archived") without touching its vector.
+   * archived: records archivedAt and archivedReason. active: clears them.
+   */
+  async function setState(userId, id, { state, reason = null, historyEntry } = {}) {
+    assertUserId(userId);
+    assertId(id);
+    if (state !== 'active' && state !== ARCHIVED) throw new Error(`setState: unknown state "${state}".`);
+
+    const existing = await findOwnedPoint(userId, id, { includeArchived: true });
+    if (!existing) {
+      throw new Error(`setState: memory ${id} not found for user "${userId}".`);
+    }
+
+    const { archivedAt: _at, archivedReason: _reason, ...rest } = existing.payload;
+    const now = new Date().toISOString();
+    const payload = {
+      ...rest,
+      state,
+      ...(state === ARCHIVED ? { archivedAt: now, archivedReason: reason } : {}),
+      updatedAt: now,
+      history: withHistory(rest.history, historyEntry),
+    };
+    await client.overwritePayload(collection, {
+      payload,
+      filter: userFilter(userId, { id, includeArchived: true }),
+      wait: true,
+    });
+    return toMemory({ id, payload });
+  }
+
+  /** Hard delete: removes the point completely, archived or not, including its history. */
   async function deleteMemory(userId, id) {
     assertUserId(userId);
     assertId(id);
 
-    const existing = await findOwnedPoint(userId, id);
+    const existing = await findOwnedPoint(userId, id, { includeArchived: true });
     if (!existing) {
       throw new Error(`deleteMemory: memory ${id} not found for user "${userId}".`);
     }
 
-    await client.delete(collection, { filter: userFilter(userId, { id }), wait: true });
+    await client.delete(collection, { filter: userFilter(userId, { id, includeArchived: true }), wait: true });
   }
 
+  /** Hard delete of every point of the user, archived ones included. */
   async function deleteAllForUser(userId) {
     assertUserId(userId);
-    await client.delete(collection, { filter: userFilter(userId), wait: true });
+    await client.delete(collection, { filter: userFilter(userId, { includeArchived: true }), wait: true });
   }
 
   return {
@@ -236,8 +307,10 @@ export function createVectorStore({ collection = config.memory.collection } = {}
     addMemories,
     search,
     getById,
+    getHistory,
     getAll,
     updateMemory,
+    setState,
     deleteMemory,
     deleteAllForUser,
   };

@@ -22,6 +22,8 @@
     "eval:retrieval": "node scripts/eval-retrieval.js",
     "eval:robustness": "node scripts/eval-robustness.js",
     "eval:update": "node scripts/eval-update.js",
+    "eval:update:9a": "node scripts/eval-update.js --only=9a,9b",
+    "eval:context": "node scripts/eval-context.js",
     "eval:perf": "node scripts/eval-perf.js",
     "eval:report": "node scripts/eval-full-report.js"
   },

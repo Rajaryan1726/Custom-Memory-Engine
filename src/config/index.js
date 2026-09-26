@@ -26,6 +26,13 @@ if (!Number.isInteger(embeddingDim) || embeddingDim <= 0) {
 
 const qdrantApiKey = process.env.QDRANT_API_KEY?.trim();
 
+// Optional. Minimum similarity for memories injected by getContext(); default from the Phase 4 retrieval eval.
+const rawThreshold = process.env.MEMORY_SCORE_THRESHOLD?.trim();
+const scoreThreshold = rawThreshold ? Number.parseFloat(rawThreshold) : 0.22;
+if (!Number.isFinite(scoreThreshold) || scoreThreshold < -1 || scoreThreshold > 1) {
+  throw new Error(`MEMORY_SCORE_THRESHOLD must be a number between -1 and 1, got "${rawThreshold}".`);
+}
+
 const config = Object.freeze({
   qdrant: Object.freeze({
     url: process.env.QDRANT_URL.trim(),
@@ -42,6 +49,7 @@ const config = Object.freeze({
   }),
   memory: Object.freeze({
     collection: process.env.MEMORY_COLLECTION.trim(),
+    scoreThreshold,
   }),
 });
 

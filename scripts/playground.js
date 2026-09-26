@@ -1,6 +1,6 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
 import config from '../src/config/index.js';
-import { createMemoryEngine } from '../src/memory/MemoryEngine.js';
+import { createMemoryEngine, formatContext } from '../src/memory/MemoryEngine.js';
 
 const PLAYGROUND_COLLECTION = 'custom_user_memories_playground';
 const EXTRACTION = process.argv.includes('--naive') ? 'naive' : 'llm';
@@ -75,6 +75,14 @@ async function main() {
     console.log(`  ${r.createdAt}  [${r.category ?? '-'}] ${r.text}  ${JSON.stringify(r.metadata)}`);
   }
   all.results.forEach((r) => student1ResultIds.push(r.id));
+
+  section('e2. getContext + formatContext for student_1');
+  for (const q of ['recursion ka example do', 'thanks!']) {
+    const ctx = await memory.getContext(q, { userId: 'student_1' });
+    [...ctx.profile, ...ctx.relevant].forEach((r) => student1ResultIds.push(r.id));
+    console.log(`\n  Q: ${q}${ctx.smallTalk ? '   (small talk: vector search skipped)' : ''}`);
+    console.log(formatContext(ctx).replace(/^/gm, '    '));
+  }
 
   section('f. Isolation check');
   const leaked = student1ResultIds.filter((id) => student2Ids.has(id));

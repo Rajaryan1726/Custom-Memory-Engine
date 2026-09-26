@@ -1,6 +1,7 @@
 import config from '../config/index.js';
 import { embed, embedMany } from '../llm/embed.js';
 import { createVectorStore } from '../stores/vectorStore.js';
+import { formatContext, isSmallTalk } from './context.js';
 import { decide } from './decider.js';
 import { extractFacts } from './extractor.js';
 import { contentToText } from './messages.js';
@@ -20,8 +21,23 @@ function toResult(memory) {
     metadata: memory.metadata,
     createdAt: memory.createdAt,
     updatedAt: memory.updatedAt,
+    state: memory.state,
+    ...(memory.state === 'archived'
+      ? { archivedAt: memory.archivedAt, archivedReason: memory.archivedReason }
+      : {}),
   };
 }
+
+/** One entry of a memory's history. */
+function historyEntry(event, text, metadata) {
+  return { event, text, at: new Date().toISOString(), sessionId: metadata?.sessionId ?? null };
+}
+
+// getContext(): profile = always-relevant facts, relevant = vector search over the rest.
+const PROFILE_CATEGORIES = ['identity', 'progress', 'preference', 'goal'];
+const RELEVANT_CATEGORIES = ['weak_topic', 'other'];
+const PROFILE_LIMIT = 15;
+const RELEVANT_LIMIT = 3;
 
 // ---- add() pipeline steps -------------------------------------------------
 // select (naive or LLM) -> embed -> find related memories -> decide -> apply.
@@ -61,6 +77,7 @@ async function storeCandidates(store, userId, embedded, metadata, source) {
       vector: c.vector,
       category: c.category,
       metadata: { ...metadata, source },
+      historyEntry: historyEntry('ADD', c.text, metadata),
     }))
   );
   return embedded.map((c, i) => ({ id: ids[i], text: c.text, event: 'ADD' }));
@@ -194,9 +211,14 @@ export function createMemoryEngine({
     const results = new Array(facts.length);
 
     // Apply in order: DELETE, then UPDATE, then ADD.
+    // A decider DELETE archives the memory (soft delete); the ended fact is the reason.
     for (const [i, p] of plan.entries()) {
       if (p.action !== 'DELETE') continue;
-      await store.deleteMemory(userId, p.memoryId);
+      await store.setState(userId, p.memoryId, {
+        state: 'archived',
+        reason: p.text,
+        historyEntry: historyEntry('ARCHIVE', p.previousText, metadata),
+      });
       results[i] = { id: p.memoryId, text: p.text, event: 'DELETE', previousText: p.previousText };
     }
 
@@ -212,6 +234,7 @@ export function createMemoryEngine({
         vector: vectorFor.get(i) ?? embedded[i].vector,
         category: embedded[i].category,
         metadata: { ...(p.previousMetadata ?? {}), ...metadata, source: extraction },
+        historyEntry: historyEntry('UPDATE', p.text, metadata),
       });
       results[i] = { id: p.memoryId, text: p.text, event: 'UPDATE', previousText: p.previousText };
     }
@@ -243,7 +266,7 @@ export function createMemoryEngine({
     );
   }
 
-  async function search(query, { userId, limit = 5, category, scoreThreshold } = {}) {
+  async function search(query, { userId, limit = 5, category, scoreThreshold, includeArchived = false } = {}) {
     requireUserId(userId, 'search');
     if (typeof query !== 'string' || !query.trim()) {
       throw new Error('MemoryEngine.search: query must be a non-empty string.');
@@ -251,28 +274,92 @@ export function createMemoryEngine({
 
     await ready();
     const vector = await embed(query);
-    const memories = await store.search(userId, vector, { limit, category, scoreThreshold });
+    const memories = await store.search(userId, vector, { limit, category, scoreThreshold, includeArchived });
     return { results: memories.map(toResult) };
   }
 
-  async function getAll({ userId, category } = {}) {
+  async function getAll({ userId, category, includeArchived = false } = {}) {
     requireUserId(userId, 'getAll');
     await ready();
-    const memories = await store.getAll(userId, { category });
+    const memories = await store.getAll(userId, { category, includeArchived });
     return { results: memories.map(toResult) };
   }
 
+  /** One memory by id, or null if it does not exist or belongs to another user. */
+  async function get(id, { userId, includeArchived = false } = {}) {
+    requireUserId(userId, 'get');
+    await ready();
+    const memory = await store.getById(userId, id, { includeArchived });
+    return memory ? toResult(memory) : null;
+  }
+
+  /** History entries [{ event, text, at, sessionId }], oldest first, or null if not this user's. */
+  async function history(id, { userId } = {}) {
+    requireUserId(userId, 'history');
+    await ready();
+    return store.getHistory(userId, id);
+  }
+
+  /** Brings an archived memory back to active. A no-op for a memory that is already active. */
+  async function restore(id, { userId, metadata = {} } = {}) {
+    requireUserId(userId, 'restore');
+    await ready();
+    return runExclusive(userId, async () => {
+      const existing = await store.getById(userId, id, { includeArchived: true });
+      if (!existing) throw new Error(`MemoryEngine.restore: memory ${id} not found for user "${userId}".`);
+      if (existing.state !== 'archived') return toResult(existing);
+      const restored = await store.setState(userId, id, {
+        state: 'active',
+        historyEntry: historyEntry('RESTORE', existing.text, metadata),
+      });
+      return toResult(restored);
+    });
+  }
+
+  /**
+   * Context for the tutor's next answer.
+   * profile:  active identity/progress/preference/goal memories, newest first (no vector search)
+   * relevant: vector search over weak_topic/other, above config.memory.scoreThreshold
+   * Small talk ("thanks", "ok bhai") skips the embedding and vector search; relevant is [].
+   */
+  async function getContext(query, { userId } = {}) {
+    requireUserId(userId, 'getContext');
+    if (typeof query !== 'string') throw new Error('MemoryEngine.getContext: query must be a string.');
+    await ready();
+
+    const smallTalk = isSmallTalk(query);
+    const [profileAll, relevant] = await Promise.all([
+      store.getAll(userId, { category: PROFILE_CATEGORIES }),
+      smallTalk
+        ? []
+        : (async () =>
+            store.search(userId, await embed(query), {
+              category: RELEVANT_CATEGORIES,
+              limit: RELEVANT_LIMIT,
+              scoreThreshold: config.memory.scoreThreshold,
+            }))(),
+    ]);
+    const profile = profileAll
+      .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
+      .slice(0, PROFILE_LIMIT);
+    return { profile: profile.map(toResult), relevant: relevant.map(toResult), smallTalk };
+  }
+
+  /** Hard delete: removes the memory completely, archived or not, including its history. */
   async function deleteMemory(id, { userId } = {}) {
     requireUserId(userId, 'delete');
     await ready();
-    await store.deleteMemory(userId, id);
+    await runExclusive(userId, () => store.deleteMemory(userId, id));
   }
 
+  /** Hard delete of all the user's memories, archived ones included. */
   async function deleteAll({ userId } = {}) {
     requireUserId(userId, 'deleteAll');
     await ready();
-    await store.deleteAllForUser(userId);
+    await runExclusive(userId, () => store.deleteAllForUser(userId));
   }
 
-  return { add, search, getAll, delete: deleteMemory, deleteAll };
+  return { add, search, getAll, get, history, restore, getContext, delete: deleteMemory, deleteAll };
 }
+
+export { formatContext, isSmallTalk };
