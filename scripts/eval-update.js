@@ -1,12 +1,9 @@
 // Update/dedupe eval (Phase 5b). Each scenario is a sequence of add() calls followed by
 // checks on getAll and on the events returned by add().
 import { QdrantClient } from '@qdrant/js-client-rest';
-import config from '../src/config/index.js';
-import { openai } from '../src/llm/client.js';
-import { createMemoryEngine } from '../src/memory/MemoryEngine.js';
-import { extractFacts } from '../src/memory/extractor.js';
 import { DECIDER_PROMPT, EXTRACTION_PROMPT } from '../src/memory/prompts.js';
 import { listCollections, saveResult, stats, timed } from './eval-utils.js';
+import { config, createMemoryEngine, extractFacts, openai } from './runtime.js';
 
 const COLLECTION = 'custom_user_memories_update_eval';
 

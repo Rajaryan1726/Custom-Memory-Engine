@@ -2,10 +2,8 @@
 // (bypassing extraction, so only retrieval is measured), then queries through
 // MemoryEngine.search exactly as an app would.
 import { readFile } from 'node:fs/promises';
-import { embedMany } from '../src/llm/embed.js';
-import { createMemoryEngine } from '../src/memory/MemoryEngine.js';
-import { createVectorStore } from '../src/stores/vectorStore.js';
 import { EVAL_COLLECTION, dropEvalCollection, listCollections, round, saveResult, stats } from './eval-utils.js';
+import { createMemoryEngine, createVectorStore, embedMany } from './runtime.js';
 
 const CASES_URL = new URL('../tests/retrieval-cases.json', import.meta.url);
 

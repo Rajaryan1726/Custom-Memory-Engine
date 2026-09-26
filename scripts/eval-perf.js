@@ -2,14 +2,9 @@
 // Token usage is captured by wrapping the shared OpenAI client from src/llm/client.js
 // at runtime (no source change).
 import { readFile } from 'node:fs/promises';
-import config from '../src/config/index.js';
-import { openai } from '../src/llm/client.js';
-import { embed, embedMany } from '../src/llm/embed.js';
-import { extractFacts } from '../src/memory/extractor.js';
 import { EXTRACTION_PROMPT } from '../src/memory/prompts.js';
-import { createMemoryEngine } from '../src/memory/MemoryEngine.js';
-import { createVectorStore } from '../src/stores/vectorStore.js';
 import { EVAL_COLLECTION, dropEvalCollection, listCollections, round, saveResult, stats, timed } from './eval-utils.js';
+import { config, createMemoryEngine, createVectorStore, embed, embedMany, extractFacts, openai } from './runtime.js';
 
 // Prices per 1M tokens, checked on https://developers.openai.com/api/docs/pricing on 2026-09-26 (standard tier).
 const PRICING = {

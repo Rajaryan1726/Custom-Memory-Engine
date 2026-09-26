@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { RESULTS_DIR, round, saveResult } from './eval-utils.js';
 
 const SRC_FILES = [
+  'src/index.js',
   'src/config/index.js',
   'src/llm/client.js',
   'src/llm/embed.js',

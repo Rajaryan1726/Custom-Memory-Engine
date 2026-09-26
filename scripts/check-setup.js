@@ -1,5 +1,5 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
-import config from '../src/config/index.js';
+import { config } from './runtime.js';
 
 function isConnectionRefused(err) {
   // fetch() wraps the socket error, so look through the cause chain.

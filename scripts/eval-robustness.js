@@ -1,11 +1,8 @@
 // Robustness eval: isolation at scale, edge inputs, and the stale-fact baseline.
 import { randomUUID } from 'node:crypto';
 import { QdrantClient } from '@qdrant/js-client-rest';
-import config from '../src/config/index.js';
-import { embed, embedMany } from '../src/llm/embed.js';
-import { createMemoryEngine } from '../src/memory/MemoryEngine.js';
-import { createVectorStore } from '../src/stores/vectorStore.js';
 import { EVAL_COLLECTION, dropEvalCollection, listCollections, saveResult } from './eval-utils.js';
+import { config, createMemoryEngine, createVectorStore, embed, embedMany } from './runtime.js';
 
 const NAMES = ['Aarav', 'Diya', 'Kabir', 'Ananya', 'Vihaan', 'Isha', 'Reyansh', 'Meera', 'Arnav', 'Saanvi'];
 const TOPICS = ['recursion', 'dynamic programming', 'graphs', 'pointers', 'hashing', 'trees', 'sorting', 'linked lists', 'stacks', 'bit manipulation'];

@@ -1,5 +1,6 @@
-import config from '../config/index.js';
-import { embed, embedMany } from '../llm/embed.js';
+import { validateConfig } from '../config/index.js';
+import { createLlmClient } from '../llm/client.js';
+import { createEmbedder } from '../llm/embed.js';
 import { createVectorStore } from '../stores/vectorStore.js';
 import { formatContext, isSmallTalk } from './context.js';
 import { decide } from './decider.js';
@@ -57,13 +58,8 @@ function selectTextsNaive(messages) {
     .map((text) => ({ text, category: null, status: 'active' }));
 }
 
-/** LLM selection: extracted facts about the user. Returns [{ text, category, status }]. */
-async function selectTextsLlm(messages) {
-  return extractFacts(messages);
-}
-
 /** Embeds all candidate texts in one call. Returns candidates with a vector attached. */
-async function embedCandidates(candidates) {
+async function embedCandidates(candidates, embedMany) {
   const vectors = await embedMany(candidates.map((c) => c.text));
   return candidates.map((c, i) => ({ ...c, vector: vectors[i] }));
 }
@@ -104,7 +100,7 @@ async function findCandidates(store, userId, facts) {
  * Exact-text matches are NOOP without an LLM call; the decider is skipped
  * entirely when no remaining fact has a related memory.
  */
-async function planActions(facts, candidateLists) {
+async function planActions(facts, candidateLists, chat) {
   const plan = new Array(facts.length);
   const pending = [];
 
@@ -130,7 +126,8 @@ async function planActions(facts, candidateLists) {
   for (const i of pending) for (const m of candidateLists[i]) memoriesById.set(m.id, m);
   const decisions = await decide(
     pending.map((i) => facts[i]),
-    [...memoriesById.values()].map(({ id, text, category }) => ({ id, text, category }))
+    [...memoriesById.values()].map(({ id, text, category }) => ({ id, text, category })),
+    { chat }
   );
   decisions.forEach((d, k) => {
     const previous = d.memoryId ? memoriesById.get(d.memoryId) : undefined;
@@ -141,18 +138,43 @@ async function planActions(facts, candidateLists) {
 
 // ---- engine ---------------------------------------------------------------
 
+/**
+ * Creates one engine instance. Everything it uses (OpenAI client, embedder, Qdrant
+ * client, queues) is created here from `config`; nothing is shared between instances
+ * and nothing is read from the environment.
+ *
+ * config: { openai: { apiKey, chatModel, embeddingModel, embeddingDim },
+ *           qdrant: { url, apiKey? }, collection, scoreThreshold? }
+ * collection: optional override of config.collection
+ * llm: optional client from createLlmClient() (advanced: lets tests instrument calls);
+ *      must use the same apiKey/chatModel as config
+ */
 export function createMemoryEngine({
-  collection = config.memory.collection,
+  config,
+  collection,
   extraction = 'llm',
   dedupe = true,
+  llm,
 } = {}) {
+  const cfg = validateConfig(config, { collection });
   if (!EXTRACTION_MODES.includes(extraction)) {
     throw new Error(
       `createMemoryEngine: extraction must be one of ${EXTRACTION_MODES.join(', ')}, got "${extraction}".`
     );
   }
-  const selectTexts = extraction === 'llm' ? selectTextsLlm : selectTextsNaive;
-  const store = createVectorStore({ collection });
+  if (llm !== undefined && (typeof llm?.chat !== 'function' || !llm?.openai)) {
+    throw new Error('createMemoryEngine: llm must be a client from createLlmClient() ({ openai, chat }).');
+  }
+
+  const client = llm ?? createLlmClient({ apiKey: cfg.openai.apiKey, chatModel: cfg.openai.chatModel });
+  const { embed, embedMany } = createEmbedder({
+    openai: client.openai,
+    embeddingModel: cfg.openai.embeddingModel,
+    embeddingDim: cfg.openai.embeddingDim,
+  });
+  const store = createVectorStore({ qdrant: cfg.qdrant, embeddingDim: cfg.openai.embeddingDim, collection: cfg.collection });
+  const selectTexts =
+    extraction === 'llm' ? (messages) => extractFacts(messages, { chat: client.chat }) : selectTextsNaive;
 
   let readyPromise = null;
   function ready() {
@@ -198,16 +220,16 @@ export function createMemoryEngine({
     if (active.length === 0) return { results: skipped };
 
     await ready();
-    const embedded = await embedCandidates(active);
+    const embedded = await embedCandidates(active, embedMany);
     const stored = await storeCandidates(store, userId, embedded, metadata, extraction);
     return { results: [...stored, ...skipped] };
   }
 
   async function addWithDedupe(facts, userId, metadata) {
     await ready();
-    const embedded = await embedCandidates(facts);
+    const embedded = await embedCandidates(facts, embedMany);
     const candidateLists = await findCandidates(store, userId, embedded);
-    const plan = await planActions(embedded, candidateLists);
+    const plan = await planActions(embedded, candidateLists, client.chat);
     const results = new Array(facts.length);
 
     // Apply in order: DELETE, then UPDATE, then ADD.
@@ -319,7 +341,7 @@ export function createMemoryEngine({
   /**
    * Context for the tutor's next answer.
    * profile:  active identity/progress/preference/goal memories, newest first (no vector search)
-   * relevant: vector search over weak_topic/other, above config.memory.scoreThreshold
+   * relevant: vector search over weak_topic/other, above config.scoreThreshold
    * Small talk ("thanks", "ok bhai") skips the embedding and vector search; relevant is [].
    */
   async function getContext(query, { userId } = {}) {
@@ -336,7 +358,7 @@ export function createMemoryEngine({
             store.search(userId, await embed(query), {
               category: RELEVANT_CATEGORIES,
               limit: RELEVANT_LIMIT,
-              scoreThreshold: config.memory.scoreThreshold,
+              scoreThreshold: cfg.scoreThreshold,
             }))(),
     ]);
     const profile = profileAll
@@ -359,7 +381,18 @@ export function createMemoryEngine({
     await runExclusive(userId, () => store.deleteAllForUser(userId));
   }
 
-  return { add, search, getAll, get, history, restore, getContext, delete: deleteMemory, deleteAll };
+  return {
+    collection: cfg.collection,
+    add,
+    search,
+    getAll,
+    get,
+    history,
+    restore,
+    getContext,
+    delete: deleteMemory,
+    deleteAll,
+  };
 }
 
 export { formatContext, isSmallTalk };

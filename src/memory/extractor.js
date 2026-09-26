@@ -1,4 +1,3 @@
-import { chat } from '../llm/client.js';
 import { contentToText } from './messages.js';
 import { CATEGORIES, EXTRACTION_PROMPT, STATUSES } from './prompts.js';
 
@@ -34,10 +33,12 @@ function normalizeFacts(facts) {
 
 /**
  * Extracts durable facts about the user from a conversation.
+ * deps.chat is the chat function of the engine's LLM client (createLlmClient).
  * messages: [{ role, content }]. Returns [{ text, category, status }],
  * where status is "active" (true now) or "ended" (the user said it is no longer true).
  */
-export async function extractFacts(messages) {
+export async function extractFacts(messages, { chat } = {}) {
+  if (typeof chat !== 'function') throw new Error('extractFacts: a chat function is required ({ chat }).');
   if (!Array.isArray(messages)) {
     throw new Error('extractFacts: messages must be an array of { role, content }.');
   }

@@ -1,11 +1,9 @@
 // Context eval (Phase 6): runs getContext() over the retrieval cases and measures
 // whether the expected memory reaches the tutor's context (profile + relevant).
 import { readFile } from 'node:fs/promises';
-import { embedMany } from '../src/llm/embed.js';
-import { createMemoryEngine, formatContext } from '../src/memory/MemoryEngine.js';
-import { createVectorStore } from '../src/stores/vectorStore.js';
-import config from '../src/config/index.js';
 import { EVAL_COLLECTION, dropEvalCollection, listCollections, saveResult, stats, timed } from './eval-utils.js';
+import { formatContext } from '../src/index.js';
+import { config, createMemoryEngine, createVectorStore, embedMany } from './runtime.js';
 
 const CASES_URL = new URL('../tests/retrieval-cases.json', import.meta.url);
 const PHASE4 = { top1: 0.714, top3: 1.0 };
@@ -71,7 +69,7 @@ async function main() {
   const profileSize = stats(rows.map((r) => r.profileKeys.length));
   const chars = stats(rows.map((r) => r.contextChars));
 
-  console.log(`Context eval: ${Object.keys(students).length} students, ${idToKey.size} memories, ${queries.length} queries, threshold ${config.memory.scoreThreshold}\n`);
+  console.log(`Context eval: ${Object.keys(students).length} students, ${idToKey.size} memories, ${queries.length} queries, threshold ${config.scoreThreshold}\n`);
   for (const r of rows) {
     const tag = r.expected.length === 0 ? `NONE (${r.relevant.length} injected)` : r.found ? `FOUND in ${r.foundIn}` : 'MISSED';
     console.log(`${tag.padEnd(22)} [${r.userId}] "${r.query}"${r.smallTalk ? '  [small-talk gate]' : ''}  expected: ${r.expected.join(', ') || '(nothing)'}`);
@@ -92,7 +90,7 @@ async function main() {
 
   const file = await saveResult('context', {
     runAt: new Date().toISOString(),
-    threshold: config.memory.scoreThreshold,
+    threshold: config.scoreThreshold,
     summary: {
       contextRecall: recall,
       searchOnlyRecall,

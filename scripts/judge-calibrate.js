@@ -2,9 +2,9 @@
 // Run directly (npm run judge:calibrate) for per-item output, or import runCalibration().
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import config from '../src/config/index.js';
 import { saveResult } from './eval-utils.js';
 import { judgeFact } from './judge.js';
+import { config } from './runtime.js';
 
 const CALIBRATION_URL = new URL('../tests/judge-calibration.json', import.meta.url);
 

@@ -1,7 +1,5 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
-import config from '../src/config/index.js';
-import { embed, embedMany } from '../src/llm/embed.js';
-import { createVectorStore } from '../src/stores/vectorStore.js';
+import { config, createVectorStore, embed, embedMany } from './runtime.js';
 
 const TEST_COLLECTION = 'custom_user_memories_test';
 

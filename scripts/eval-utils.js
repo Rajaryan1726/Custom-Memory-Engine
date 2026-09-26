@@ -1,7 +1,7 @@
 // Shared helpers for the eval scripts. Not used by src/.
 import { mkdir, writeFile } from 'node:fs/promises';
 import { QdrantClient } from '@qdrant/js-client-rest';
-import config from '../src/config/index.js';
+import { config } from './runtime.js';
 
 export const EVAL_COLLECTION = 'custom_user_memories_eval';
 export const RESULTS_DIR = new URL('../tests/results/', import.meta.url);

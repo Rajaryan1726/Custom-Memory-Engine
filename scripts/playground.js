@@ -1,6 +1,6 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
-import config from '../src/config/index.js';
-import { createMemoryEngine, formatContext } from '../src/memory/MemoryEngine.js';
+import { formatContext } from '../src/index.js';
+import { config, createMemoryEngine } from './runtime.js';
 
 const PLAYGROUND_COLLECTION = 'custom_user_memories_playground';
 const EXTRACTION = process.argv.includes('--naive') ? 'naive' : 'llm';

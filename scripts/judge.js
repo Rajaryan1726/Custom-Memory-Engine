@@ -1,9 +1,8 @@
 // LLM judge for extraction evals. Grades ONE extracted fact per call against the
 // conversation, so facts cannot influence each other's verdicts. The judge only
 // decides precision (correct / wrong); recall comes from the keyword scorer.
-import config from '../src/config/index.js';
-import { chat } from '../src/llm/client.js';
 import { contentToText } from '../src/memory/messages.js';
+import { chat, config } from './runtime.js';
 
 const MAX_CONCURRENT = 3;
 

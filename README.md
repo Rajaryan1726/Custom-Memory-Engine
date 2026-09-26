@@ -68,17 +68,20 @@ The Qdrant dashboard is at `http://localhost:<QDRANT_PORT>/dashboard`. This repo
 | `EMBEDDING_DIM` | yes | `1536` | Must match the embedding model |
 | `MEMORY_COLLECTION` | yes | `custom_user_memories` | Qdrant collection name |
 | `JUDGE_MODEL` | no | `gpt-4o` | Eval judge only (falls back to `gpt-4o-mini`) |
+| `MEMORY_SCORE_THRESHOLD` | no | `0.22` | Minimum similarity for `getContext()` relevant memories |
 
-The config fails fast with a clear error naming any missing variable.
+These variables are read only by this repo's **scripts** (through `loadConfigFromEnv()`), and they fail fast with a clear error naming any missing variable. The library itself never reads the environment; see [Use as a library](#use-as-a-library).
 
 ---
 
 ## Usage
 
 ```js
-import { createMemoryEngine } from './src/memory/MemoryEngine.js';
+import { createMemoryEngine, loadConfigFromEnv } from 'custom-memory-engine';
 
-const memory = createMemoryEngine(); // { collection, extraction: 'llm' | 'naive' }
+// Inside this repo: config from .env (load it first, e.g. import 'dotenv/config').
+// In another app, build the config object yourself, see "Use as a library" below.
+const memory = createMemoryEngine({ config: loadConfigFromEnv() }); // + { collection, extraction: 'llm' | 'naive' }
 
 // After each chat turn (ideally in the background, it takes ~1.7 s):
 const { results } = await memory.add(
@@ -105,7 +108,43 @@ await memory.deleteAll({ userId: 'student_42' });
 - Every method requires `userId` and throws without it.
 - `content` can be a string or an OpenAI-style array of parts; only `{ type: "text" }` parts are read.
 - The collection and its payload indexes are created automatically on first use.
-- Search results: `{ id, text, score, category, metadata, createdAt, updatedAt }`.
+- Search results: `{ id, text, score, category, metadata, createdAt, updatedAt, state }`.
+
+---
+
+## Use as a library
+
+Install it from a local path or git (for example `npm install ../custom-memory-engine`), then build the config from **your app's own** environment variable names. The engine never reads `process.env` and never loads a `.env` file, so it cannot pick up your app's variables by accident (for example your RAG app's `QDRANT_URL`).
+
+```js
+import { createMemoryEngine, formatContext } from 'custom-memory-engine';
+
+const memory = createMemoryEngine({
+  config: {
+    openai: {
+      apiKey: process.env.MEMORY_OPENAI_API_KEY,
+      chatModel: process.env.MEMORY_CHAT_MODEL ?? 'gpt-4o-mini',
+      embeddingModel: 'text-embedding-3-small',
+      embeddingDim: 1536,
+    },
+    qdrant: { url: process.env.MEMORY_QDRANT_URL, apiKey: process.env.MEMORY_QDRANT_API_KEY },
+    collection: 'student_memories',
+    scoreThreshold: 0.22, // optional
+  },
+});
+
+// Before answering:
+const ctx = await memory.getContext(studentMessage, { userId });
+const block = formatContext(ctx); // "Student context (do not cite)" + profile/relevant lines
+
+// After replying (in the background):
+memory.add([{ role: 'user', content: studentMessage }], { userId, metadata: { sessionId } }).catch(console.error);
+```
+
+- **Exports:** `createMemoryEngine`, `loadConfigFromEnv` (reads this repo's variable names, only when called), `formatContext`, `isSmallTalk`, `CATEGORIES`.
+- **Importing has no side effects:** no environment reads, no `.env` loading, no clients created. `npm run check:library` verifies this in a child process with an empty environment.
+- **`createMemoryEngine` validates the config** and throws one error naming every missing field (for example `config.openai.apiKey is required`).
+- **Every engine instance has its own** OpenAI client, embedder, Qdrant client and per-user queue. Two engines with different configs or collections in one process share nothing.
 
 ---
 
@@ -113,15 +152,16 @@ await memory.deleteAll({ userId: 'student_42' });
 
 ```
 src/
-  config/index.js        load + validate .env, export one frozen config object
-  llm/client.js          chat() wrapper: JSON mode, temperature, retries on 429/5xx
-  llm/embed.js           embed() / embedMany(): one API call per batch, dimension check
+  index.js               public entry: createMemoryEngine, loadConfigFromEnv, formatContext, isSmallTalk, CATEGORIES
+  config/index.js        validateConfig() for the explicit config object; loadConfigFromEnv() for scripts
+  llm/client.js          createLlmClient(): chat() with JSON mode, temperature, retries on 429/5xx
+  llm/embed.js           createEmbedder(): embed() / embedMany(), one API call per batch, dimension check
   stores/vectorStore.js  Qdrant access only; every read/update/delete filtered by userId
-  memory/MemoryEngine.js public API: add, search, getAll, delete, deleteAll
+  memory/MemoryEngine.js createMemoryEngine(): add, search, getAll, get, getContext, history, restore, delete, deleteAll
   memory/extractor.js    extractFacts(): LLM extraction + normalisation
   memory/prompts.js      extraction prompt and categories
   memory/messages.js     contentToText(): string or multi-part content -> text
-scripts/                 setup checks, playground, eval runners, LLM judge
+scripts/                 setup checks, playground, eval runners, LLM judge (scripts/runtime.js loads .env)
 tests/                   eval cases, retrieval cases, judge calibration set
 docs/evals/              committed evaluation reports
 ```
@@ -141,6 +181,7 @@ Folder rules (see [CLAUDE.md](CLAUDE.md)):
 |---|---|
 | `db:up` / `db:down` / `db:logs` | Start, stop and tail the Qdrant container |
 | `check` | Config + Qdrant connectivity check |
+| `check:library` | Library safety: side-effect-free import, config validation, two isolated engines |
 | `test:llm` | Chat, JSON mode and embeddings smoke test |
 | `test:store` | Vector store tests, including cross-user isolation (uses a scratch collection) |
 | `playground` / `playground:naive` | End-to-end demo in LLM or naive extraction mode |

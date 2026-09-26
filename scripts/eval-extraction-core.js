@@ -10,11 +10,10 @@
 //                e.g. [["ML", "Machine Learning"]]
 //   status:      "active" (default) or "ended"; a fact only matches if its status matches too
 import { readFile } from 'node:fs/promises';
-import config from '../src/config/index.js';
-import { extractFacts } from '../src/memory/extractor.js';
 import { saveResult } from './eval-utils.js';
 import { calibrationLine, runCalibration } from './judge-calibrate.js';
 import { judgeFacts } from './judge.js';
+import { config, extractFacts } from './runtime.js';
 
 function categoryMatches(actual, wanted) {
   if (wanted === 'any') return true;

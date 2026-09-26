@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "A memory layer for AI apps (Mem0-style), backed by Qdrant and OpenAI.",
   "type": "module",
+  "exports": "./src/index.js",
+  "files": [
+    "src"
+  ],
   "engines": {
     "node": ">=20"
   },
@@ -11,6 +15,7 @@
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f qdrant",
     "check": "node scripts/check-setup.js",
+    "check:library": "node scripts/check-library.js",
     "test:llm": "node scripts/test-llm.js",
     "test:store": "node scripts/test-vector-store.js",
     "playground": "node scripts/playground.js",
@@ -32,7 +37,9 @@
   "license": "ISC",
   "dependencies": {
     "@qdrant/js-client-rest": "^1.19.0",
-    "dotenv": "^18.0.4",
     "openai": "^7.23.0"
+  },
+  "devDependencies": {
+    "dotenv": "^18.0.4"
   }
 }

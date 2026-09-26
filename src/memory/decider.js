@@ -1,4 +1,3 @@
-import { chat } from '../llm/client.js';
 import { DECIDER_ACTIONS, DECIDER_PROMPT } from './prompts.js';
 
 function warn(reason) {
@@ -26,8 +25,10 @@ function buildInput(facts, shortIds) {
  *   [{ action: 'ADD' | 'UPDATE' | 'DELETE' | 'NOOP', memoryId: <real id or null>, text }]
  * text is the final memory text for UPDATE, otherwise the fact text.
  * Invalid model output never throws; it falls back (see fallbackFor) and is logged.
+ * deps.chat is the chat function of the engine's LLM client (createLlmClient).
  */
-export async function decide(facts, candidates) {
+export async function decide(facts, candidates, { chat } = {}) {
+  if (typeof chat !== 'function') throw new Error('decide: a chat function is required ({ chat }).');
   // Short ids keep the prompt small and stop the model from mangling UUIDs.
   const shortIds = new Map(candidates.map((m, i) => [`m${i + 1}`, m]));
 

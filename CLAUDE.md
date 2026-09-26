@@ -24,8 +24,11 @@ npm run db:down          # stop Qdrant (data persists in the volume)
 
 ## Folder responsibilities
 
-- `src/config/` — loads `.env`, validates, exports one frozen config object.
-  Everything else reads config from here, never from `process.env` directly.
+- `src/config/` — `validateConfig()` for the explicit config object passed to
+  `createMemoryEngine({ config })`, and `loadConfigFromEnv()` for scripts only.
+  Library code (`src/`) never imports dotenv, never reads `process.env`, and has no
+  import-time side effects or module-level clients: everything is created per engine
+  instance. Scripts load `.env` through `scripts/runtime.js`.
 - `src/llm/` — provider wrappers **only** (chat completion, embeddings). Thin
   adapters; no memory logic.
 - `src/stores/` — storage **only** (Qdrant access). No business logic: no

@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { QdrantClient } from '@qdrant/js-client-rest';
-import config from '../config/index.js';
 
 const SCROLL_PAGE_SIZE = 256;
 const HISTORY_LIMIT = 20;
@@ -74,9 +73,20 @@ function toMemory(point, score) {
   return memory;
 }
 
-export function createVectorStore({ collection = config.memory.collection } = {}) {
-  const dim = config.openai.embeddingDim;
-  const client = new QdrantClient({ ...config.qdrant, checkCompatibility: false });
+/**
+ * Creates a store for one collection. Everything comes from the arguments:
+ * qdrant: { url, apiKey? }, embeddingDim, collection.
+ */
+export function createVectorStore({ qdrant, embeddingDim, collection } = {}) {
+  if (!qdrant?.url) throw new Error('createVectorStore: qdrant.url is required.');
+  if (!Number.isInteger(embeddingDim) || embeddingDim <= 0) throw new Error('createVectorStore: embeddingDim must be a positive integer.');
+  if (typeof collection !== 'string' || !collection.trim()) throw new Error('createVectorStore: collection is required.');
+  const dim = embeddingDim;
+  const client = new QdrantClient({
+    url: qdrant.url,
+    ...(qdrant.apiKey ? { apiKey: qdrant.apiKey } : {}),
+    checkCompatibility: false,
+  });
 
   /**
    * Returns the raw point (payload, optionally vector) if it belongs to userId, else null.

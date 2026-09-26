@@ -1,56 +1,107 @@
-import 'dotenv/config';
+// Config handling. Library code never reads process.env or loads .env files:
+// - validateConfig() normalises the explicit config object passed to createMemoryEngine().
+// - loadConfigFromEnv() builds that object from environment variables. It only runs when
+//   called (scripts call it after loading .env themselves); nothing here runs at import time.
 
-const REQUIRED = [
-  'QDRANT_URL',
-  'OPENAI_API_KEY',
-  'CHAT_MODEL',
-  'EMBEDDING_MODEL',
-  'EMBEDDING_DIM',
-  'MEMORY_COLLECTION',
-];
+const DEFAULT_SCORE_THRESHOLD = 0.22; // from the Phase 4 retrieval eval
 
-const missing = REQUIRED.filter((name) => !process.env[name]?.trim());
-if (missing.length > 0) {
-  throw new Error(
-    `Missing required environment variable(s): ${missing.join(', ')}. ` +
-      'Copy .env.example to .env and fill them in.'
-  );
-}
+const isNonEmptyString = (v) => typeof v === 'string' && v.trim() !== '';
 
-const embeddingDim = Number.parseInt(process.env.EMBEDDING_DIM, 10);
-if (!Number.isInteger(embeddingDim) || embeddingDim <= 0) {
-  throw new Error(
-    `EMBEDDING_DIM must be a positive integer, got "${process.env.EMBEDDING_DIM}".`
-  );
-}
+/**
+ * Validates and normalises an engine config:
+ *   { openai: { apiKey, chatModel, embeddingModel, embeddingDim, judgeModel? },
+ *     qdrant: { url, apiKey? }, collection, scoreThreshold? }
+ * `collection` may be given separately (it overrides config.collection).
+ * Throws one error naming every missing or invalid field. Returns a new frozen object.
+ */
+export function validateConfig(config, { collection, label = 'createMemoryEngine' } = {}) {
+  if (!config || typeof config !== 'object') {
+    throw new Error(`${label}: "config" is required: { openai: { apiKey, chatModel, embeddingModel, embeddingDim }, qdrant: { url }, collection }.`);
+  }
+  const openai = config.openai ?? {};
+  const qdrant = config.qdrant ?? {};
+  const problems = [];
 
-const qdrantApiKey = process.env.QDRANT_API_KEY?.trim();
+  for (const field of ['apiKey', 'chatModel', 'embeddingModel']) {
+    if (!isNonEmptyString(openai[field])) problems.push(`config.openai.${field} is required (non-empty string)`);
+  }
+  if (!Number.isInteger(openai.embeddingDim) || openai.embeddingDim <= 0) {
+    problems.push(`config.openai.embeddingDim is required (positive integer, got ${JSON.stringify(openai.embeddingDim)})`);
+  }
+  if (!isNonEmptyString(qdrant.url)) problems.push('config.qdrant.url is required (non-empty string)');
+  if (qdrant.apiKey !== undefined && qdrant.apiKey !== null && typeof qdrant.apiKey !== 'string') {
+    problems.push('config.qdrant.apiKey must be a string when set');
+  }
 
-// Optional. Minimum similarity for memories injected by getContext(); default from the Phase 4 retrieval eval.
-const rawThreshold = process.env.MEMORY_SCORE_THRESHOLD?.trim();
-const scoreThreshold = rawThreshold ? Number.parseFloat(rawThreshold) : 0.22;
-if (!Number.isFinite(scoreThreshold) || scoreThreshold < -1 || scoreThreshold > 1) {
-  throw new Error(`MEMORY_SCORE_THRESHOLD must be a number between -1 and 1, got "${rawThreshold}".`);
-}
+  const finalCollection = collection ?? config.collection;
+  if (!isNonEmptyString(finalCollection)) problems.push('config.collection is required (non-empty string), or pass { collection }');
 
-const config = Object.freeze({
-  qdrant: Object.freeze({
-    url: process.env.QDRANT_URL.trim(),
-    // Only present when set, so it can be spread straight into the client options.
-    ...(qdrantApiKey ? { apiKey: qdrantApiKey } : {}),
-  }),
-  openai: Object.freeze({
-    apiKey: process.env.OPENAI_API_KEY.trim(),
-    chatModel: process.env.CHAT_MODEL.trim(),
-    // Used only by the eval judge. Optional, defaults to gpt-4o-mini.
-    judgeModel: process.env.JUDGE_MODEL?.trim() || 'gpt-4o-mini',
-    embeddingModel: process.env.EMBEDDING_MODEL.trim(),
-    embeddingDim,
-  }),
-  memory: Object.freeze({
-    collection: process.env.MEMORY_COLLECTION.trim(),
+  const scoreThreshold = config.scoreThreshold ?? DEFAULT_SCORE_THRESHOLD;
+  if (typeof scoreThreshold !== 'number' || !Number.isFinite(scoreThreshold) || scoreThreshold < -1 || scoreThreshold > 1) {
+    problems.push(`config.scoreThreshold must be a number between -1 and 1 (got ${JSON.stringify(config.scoreThreshold)})`);
+  }
+
+  if (problems.length > 0) throw new Error(`${label}: invalid config: ${problems.join('; ')}.`);
+
+  const qdrantApiKey = isNonEmptyString(qdrant.apiKey) ? qdrant.apiKey.trim() : undefined;
+  return Object.freeze({
+    openai: Object.freeze({
+      apiKey: openai.apiKey.trim(),
+      chatModel: openai.chatModel.trim(),
+      embeddingModel: openai.embeddingModel.trim(),
+      embeddingDim: openai.embeddingDim,
+      ...(isNonEmptyString(openai.judgeModel) ? { judgeModel: openai.judgeModel.trim() } : {}),
+    }),
+    qdrant: Object.freeze({
+      url: qdrant.url.trim(),
+      // Only present when set, so it can be spread straight into the client options.
+      ...(qdrantApiKey ? { apiKey: qdrantApiKey } : {}),
+    }),
+    collection: finalCollection.trim(),
     scoreThreshold,
-  }),
-});
+  });
+}
 
-export default config;
+const REQUIRED_ENV = ['QDRANT_URL', 'OPENAI_API_KEY', 'CHAT_MODEL', 'EMBEDDING_MODEL', 'EMBEDDING_DIM', 'MEMORY_COLLECTION'];
+
+/**
+ * Builds an engine config from environment variables (this repo's variable names).
+ * Does not load .env itself: call dotenv first if you need it (the scripts do).
+ * `env` defaults to process.env and is only read when this function is called.
+ */
+export function loadConfigFromEnv(env = process.env) {
+  const missing = REQUIRED_ENV.filter((name) => !env[name]?.trim());
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required environment variable(s): ${missing.join(', ')}. Copy .env.example to .env and fill them in.`
+    );
+  }
+
+  const embeddingDim = Number.parseInt(env.EMBEDDING_DIM, 10);
+  if (!Number.isInteger(embeddingDim) || embeddingDim <= 0) {
+    throw new Error(`EMBEDDING_DIM must be a positive integer, got "${env.EMBEDDING_DIM}".`);
+  }
+
+  const rawThreshold = env.MEMORY_SCORE_THRESHOLD?.trim();
+  const scoreThreshold = rawThreshold ? Number.parseFloat(rawThreshold) : DEFAULT_SCORE_THRESHOLD;
+  if (!Number.isFinite(scoreThreshold) || scoreThreshold < -1 || scoreThreshold > 1) {
+    throw new Error(`MEMORY_SCORE_THRESHOLD must be a number between -1 and 1, got "${rawThreshold}".`);
+  }
+
+  return validateConfig(
+    {
+      openai: {
+        apiKey: env.OPENAI_API_KEY,
+        chatModel: env.CHAT_MODEL,
+        embeddingModel: env.EMBEDDING_MODEL,
+        embeddingDim,
+        // Used only by the eval judge. Optional, defaults to gpt-4o-mini.
+        judgeModel: env.JUDGE_MODEL?.trim() || 'gpt-4o-mini',
+      },
+      qdrant: { url: env.QDRANT_URL, apiKey: env.QDRANT_API_KEY },
+      collection: env.MEMORY_COLLECTION,
+      scoreThreshold,
+    },
+    { label: 'loadConfigFromEnv' }
+  );
+}

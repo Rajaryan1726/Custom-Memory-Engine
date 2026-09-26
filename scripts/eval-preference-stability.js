@@ -3,8 +3,8 @@
 // Counts come from env vars because PowerShell drops "--" in "npm run x -- --flag":
 //   PREF_ONE_OFF_RUNS  (default 20): 9a one-off message, target 0 preferences
 //   PREF_STANDING_RUNS (default 10): 9b standing message, target all preferences
-import { extractFacts } from '../src/memory/extractor.js';
 import { saveResult } from './eval-utils.js';
+import { extractFacts } from './runtime.js';
 
 function runsFrom(name, fallback) {
   const n = Number.parseInt(process.env[name] ?? String(fallback), 10);

@@ -1,5 +1,4 @@
-import { chat } from '../src/llm/client.js';
-import { embed, embedMany } from '../src/llm/embed.js';
+import { chat, embed, embedMany } from './runtime.js';
 
 async function main() {
   const answer = await chat({
