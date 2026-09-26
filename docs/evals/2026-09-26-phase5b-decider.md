@@ -106,3 +106,147 @@ state: User prefers short explanations
    - "Ab detail mein samjhao / short mein batao" jaise badlaav ko preference maano. Isse scenario 9 theek hona chahiye.
 2. **Playground:** student_2 ke liye aisa message rakho jo extract ho (jaise "Mujhe graphs samajh nahi aate"), ya check ko tab skip karo jab student_2 ki koi memory na ho.
 3. **UPDATE par metadata:** latest `sessionId` rakhna hai ya original, ye decide karo.
+
+---
+
+## Phase 5c: extraction gaps fix + metadata merge
+
+**Code under test:** Phase 5c working tree (uncommitted; HEAD = `889272a phase 5b`). Decider prompt aur decider logic unchanged.
+
+### Kya badla
+- **Extraction prompt:**
+  - Current topic ("abhi <topic> kar raha hoon", "ab <topic> start kiya") hamesha `progress` mein "User is studying <topic>" ke roop mein jaata hai.
+  - Hobbies `other` mein "User likes <X>" ke roop mein store hote hain.
+  - One-off request (sirf current answer ke baare mein) fact nahi hai. Standing request ("hamesha … samjhaya karo") preference hai.
+  - 3 naye few-shot examples: union-find, chess, "simple karke" / pseudo-code. Ye terms kisi `tests/*.json` mein nahi hain, aur naye test cases ke terms ("dry run", "football") prompt mein nahi hain (grep se dono taraf check kiya).
+- **UPDATE par metadata:** purana metadata + naye `add()` ka metadata merge hota hai, aur naye values jeet-te hain. `createdAt` wahi rehta hai.
+- **Tests:**
+  - Update scenario 9 ko 9a (one-off) aur 9b (standing) mein toda.
+  - Scenario 1 mein `sessionId` aur `createdAt` ke checks add kiye.
+  - Extended suite mein 3 naye extraction cases: one-off, standing aur hobby.
+  - Playground ka isolation check Phase 3 jaisa hi hai; code same hai, git se compare kiya.
+
+### Update suite (`eval:update`, 2 runs)
+
+| # | Scenario | Run 1 | Run 2 |
+|---|---|---|---|
+| 1 | Module 2, phir 3 (+ sessionId = session_2, createdAt same) | PASS | PASS |
+| 2 | Module 3 khatam, phir Module 4 | PASS | PASS |
+| 3 | Module 5 + linked lists, phir trees | **PASS** (5b mein FAIL) | **PASS** |
+| 4 | Same conversation 2 baar | PASS | PASS |
+| 5 | recursion 2 baar | PASS | PASS |
+| 6 | DP weak, phir clear | PASS | PASS |
+| 7 | Ended fact, kuch stored nahi | PASS | PASS |
+| 8 | recursion, phir graphs | PASS | PASS |
+| 9a | short, phir one-off "isko detail mein samjhao" | **PASS** | **PASS** |
+| 9b | short, phir standing "hamesha detail mein samjhaya karo" | **PASS** | **PASS** |
+| 10 | placement goal, phir Amazon SDE goal | PASS | PASS |
+| 11 | Lamba sequence, naam unchanged | PASS | PASS |
+| 12 | Do students, B untouched | PASS | PASS |
+| 13 | Hinglish module search: Module 3 top | PASS | PASS |
+| **Total** | | **14/14** | **14/14** |
+| 14 (extra) | Parallel add, same user | PASS | PASS |
+
+**Decider fallbacks: 0** (dono runs). Decider calls: 19 per run.
+
+Events jo pehle fail hote the:
+```
+3.  add "Main Module 5 pe hoon, abhi linked lists kar raha hoon"
+      -> ADD: User is on Module 5 | ADD: User is studying linked lists
+    add "ab trees start kiya"
+      -> UPDATE: "User is studying linked lists" -> "User is studying trees"
+9a. add "mujhe short explanations chahiye"   -> ADD: User prefers short explanations
+    add "isko detail mein samjhao"          -> (no facts)
+9b. add "short se samajh nahi aata, hamesha detail mein samjhaya karo"
+      -> UPDATE: "User prefers short explanations" -> "User prefers detailed explanations"
+1.  state: User is on Module 3  metadata={"sessionId":"session_2","source":"llm"}  createdAt unchanged=true
+```
+
+### Extraction (`eval:extraction:all`, 2 runs)
+
+| Suite | Metric | 5a.1 (run 1 / run 2) | **5c (run 1 / run 2)** |
+|---|---|---|---|
+| Original (12) | Keyword precision / recall | 100 / 100 | **100 / 100** |
+| Original (12) | Forbidden / judge precision | 0 / 100% | **0 / 100%** |
+| Extended (22 → 25 cases) | Keyword precision | 93.3% / 93.3% | **90.6% / 90.6%** (29/32) |
+| Extended | Keyword recall | 100% / 100% | **96.8% / 96.8%** (30/31) |
+| Extended | Forbidden facts | 0 / 0 | **0 / 0** |
+| Extended | Judge precision | 93.8% / 90.6% | **90.9% / 90.6%** |
+| – | Judge calibration | 95.7% (22/23) | **95.7% (22/23)** |
+
+**Target "koi extraction metric regress na ho": extended suite par MISS.** Keyword precision 2.7 points aur recall 3.2 points gira. Dono runs mein wajah same:
+
+1. **Recall miss: naya one-off rule aur ek purani expectation mein takraav.** Case `long_multiturn_mixed_with_course_questions` mein tutor kehta hai "ek cheat sheet banate hain", aur user bolta hai "haan please, table format mein dena".
+   - Naye rule ke hisaab se ye sirf *is* cheat sheet ke baare mein request hai, isliye ab preference nahi bani.
+   - Phase 4 mein likhi expectation abhi bhi `preference: table` maangti hai.
+   - Mere hisaab se naya behaviour sahi hai aur expectation purani ho gayi hai. Lekin expectation badalna approve nahi hua tha, isliye edit nahi kiya.
+2. **Precision miss:** hobby case mein "baaki time coding" se extra "User likes coding" `[other]` aaya. Judge isse correct maanta hai; keyword scorer unexpected ginta hai.
+3. `long_multiturn_facts_spread` aur `time_change_goal` ke purane unexpected facts wahi hain jo 5a.1 mein the. Unmein koi naya problem nahi.
+
+**Teeno naye cases dono runs mein sahi:**
+- One-off "is solution ka dry run karke dikhao": koi fact nahi.
+- Standing "har baar … dry run bhi dikhaya karo": "User prefers to see dry runs along with code".
+- Hobby: "User likes playing football" `[other]`.
+
+**Judge:**
+- Run 2 mein ek call gpt-4o ki 30k TPM limit se 6 retries ke baad bhi fail hua (`time_change_module`), isliye 1 fact unjudged raha. Judge precision ka denominator 32 raha.
+- Judge ki purani galtiyan wahi hain: sarcasm, aur C++ / Python ki category par sakhti.
+
+### Robustness aur playground
+- **Isolation:** 620 ids, **0 leaks**. Cross-user `getById` **0/90**.
+- **Stale baseline:** `ADD` Module 2, `UPDATE` Module 3, sirf 1 memory.
+- **Playground:** student_2 ke liye `ADD User likes cricket`. Isolation check **PASS** (13 ids, 0 leaked). Module 3 wali memory ka metadata ab `session_2` hai.
+
+### Latency (`add()`, n=8)
+
+| | Run 1 p50 / p95 | Run 2 p50 / p95 |
+|---|---|---|
+| Pehla add (decider skip) | 1,590 / 1,913 ms | 1,678 / 1,880 ms |
+| Repeat add (decider) | 2,585 / 2,877 ms | 3,093 / **7,538** ms |
+
+Run 2 ka p95 ek hi slow call hai (n=8 par p95 = max). Baaki 7 calls normal range mein the. Prompt 3 few-shots se bada hua hai, isliye extraction thoda slow hai.
+
+### Targets ka summary
+| Target | Result |
+|---|---|
+| Koi extraction metric 5a.1 se regress na ho | **MISS** (extended keyword P/R, upar wajah) |
+| Update suite dono runs mein har scenario pass | **PASS** (14/14, 14/14) |
+| 0 leaks | **PASS** |
+| 0 decider fallbacks | **PASS** |
+
+### Next steps
+1. `long_multiturn_mixed_with_course_questions` ki expectation update karo (approval ke baad): `expected` se table preference hatao, ya use `allowed` mein daalo.
+2. Hobby case mein "User likes coding" ko `allowed` mein add karo (approval ke baad).
+3. Judge ke liye 30k TPM limit: eval runs ke beech thoda gap rakho, ya judge concurrency 5 se 3 karo.
+
+### 5c follow-up: approved test edits + judge concurrency
+
+**Edits (approved):**
+
+| Case | Pehle | Ab | Wajah |
+|---|---|---|---|
+| `long_multiturn_mixed_with_course_questions` | `expected`: `{ "category": "preference", "mustInclude": ["table"] }` | wahi spec `allowed` mein | "haan please, table format mein dena" tutor ke "ek cheat sheet banate hain" ka jawab hai, yaani sirf *is* cheat sheet ke liye request. 5c ke one-off rule ke hisaab se ye standing preference nahi hai. Store ho jaaye to bhi galat nahi, isliye `allowed`. |
+| `hobby_is_other` | `allowed` nahi tha | `allowed`: `{ "category": "other", "mustInclude": ["coding"] }` | "baaki time coding" se "User likes coding" ek sahi interest hai (judge bhi correct maanta hai). Required nahi, lekin precision ko nuksaan nahi dena chahiye. |
+
+**Judge concurrency 5 se 3** (`scripts/judge.js`, `MAX_CONCURRENT`). Wajah: gpt-4o ki 30k TPM limit. 5c ke run 2 mein ek judge call 6 retries ke baad bhi fail hua tha.
+
+**Run (1 baar, edits ke baad):**
+- Pehli koshish mein OpenAI se "Request timed out" aur "Connection error" aaye (network issue; is change ki wajah se nahi). Wo run invalid maana gaya aur uske numbers use nahi kiye.
+- Connectivity check (`test:llm` pass) ke baad dobara chalaya.
+
+| Suite | Metric | 5a.1 (run 1 / run 2) | 5c (run 1 / run 2) | **5c after edits** |
+|---|---|---|---|---|
+| Original (12) | Keyword precision / recall | 100 / 100 | 100 / 100 | **100 / 100** (21/21) |
+| Original (12) | Forbidden / judge precision | 0 / 100% | 0 / 100% | **0 / 100%** |
+| Extended (25) | Keyword precision | 93.3% / 93.3% | 90.6% / 90.6% | **93.5%** (29/31) |
+| Extended | Keyword recall | 100% / 100% | 96.8% / 96.8% | **100%** (30/30) |
+| Extended | Forbidden facts | 0 / 0 | 0 / 0 | **0** |
+| Extended | Judge precision | 93.8% / 90.6% | 90.9% / 90.6% | **90.9%** (30/33) |
+| – | Judge calibration | 95.7% | 95.7% | **95.7%** (22/23) |
+| – | Judge errors (rate limit) | – | 0 / 1 | **0** |
+
+- **Extraction target ab PASS:** keyword precision, recall aur forbidden teeno 5a.1 ke barabar ya behtar hain. Judge precision 5a.1 ki range (90.6–93.8%) ke andar hai.
+- **Bache hue 2 keyword UNEXPECTED facts** wahi purane borderline hain jo 5a.1 mein bhi the: "User finds videos boring" `[other]`, aur ended old goal. Ye judge ke hisaab se correct hain.
+- **Judge ke 3 WRONG verdicts mein se:**
+  - 1 judge ki known galti hai: sarcasm (calibration item #23).
+  - 2 category par sakhti hai: Python aur C++ ko judge `preference` chahta hai.

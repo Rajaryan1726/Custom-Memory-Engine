@@ -85,7 +85,9 @@
       { "role": "user", "content": "haan please, table format mein dena" }
     ],
     "expected": [
-      { "category": "weak_topic", "mustInclude": ["sort"] },
+      { "category": "weak_topic", "mustInclude": ["sort"] }
+    ],
+    "allowed": [
       { "category": "preference", "mustInclude": ["table"] }
     ]
   },
@@ -284,6 +286,41 @@
     ],
     "expected": [
       { "category": ["preference", "identity", "other"], "mustInclude": ["C++"] }
+    ]
+  },
+  {
+    "name": "one_off_request_not_a_fact",
+    "covers": "One-off request about the current explanation",
+    "messages": [
+      { "role": "assistant", "content": "Ye raha bubble sort ka code." },
+      { "role": "user", "content": "is solution ka dry run karke dikhao" }
+    ],
+    "expected": [],
+    "forbidden": [
+      { "category": "preference", "mustInclude": ["dry run"], "why": "one-off request stored as a standing preference" }
+    ]
+  },
+  {
+    "name": "standing_request_is_preference",
+    "covers": "Standing request about how to explain from now on",
+    "messages": [
+      { "role": "user", "content": "bina dry run ke code samajh nahi aata, har baar code ke saath dry run bhi dikhaya karo" }
+    ],
+    "expected": [
+      { "category": "preference", "mustInclude": ["dry run"] }
+    ]
+  },
+  {
+    "name": "hobby_is_other",
+    "covers": "Interest or hobby",
+    "messages": [
+      { "role": "user", "content": "free time mein main football khelta hoon, baaki time coding" }
+    ],
+    "expected": [
+      { "category": "other", "mustInclude": ["football"] }
+    ],
+    "allowed": [
+      { "category": "other", "mustInclude": ["coding"] }
     ]
   }
 ]

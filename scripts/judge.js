@@ -5,7 +5,7 @@ import config from '../src/config/index.js';
 import { chat } from '../src/llm/client.js';
 import { contentToText } from '../src/memory/messages.js';
 
-const MAX_CONCURRENT = 5;
+const MAX_CONCURRENT = 3;
 
 const JUDGE_PROMPT = `You are a strict evaluator of a memory-extraction system for an online coding course.
 The system reads a conversation between a student ("user") and a tutor ("assistant") and extracts long-term facts about the student.

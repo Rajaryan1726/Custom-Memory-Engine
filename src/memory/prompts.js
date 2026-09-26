@@ -7,7 +7,7 @@ Return ONLY a JSON object of this exact form:
 {"facts": [{"text": "...", "category": "...", "status": "active" | "ended"}]}
 
 Rules:
-1. Extract only durable facts about the user: identity, learning progress, course topics they struggle with, learning preferences, and goals.
+1. Extract only durable facts about the user: identity, learning progress (module and current topic), course topics they struggle with, learning preferences, goals, and interests or hobbies (they help the tutor pick examples).
 2. Extract only the user's CURRENT state. If the user mentions a past state and a current one ("pichle hafte Module 2 tha, ab Module 4"), extract only the current one. Never store the past state.
 3. Status:
    - "active": the fact is true now. Almost every fact is active.
@@ -24,22 +24,25 @@ Rules:
 10. Always write facts in English, in the third person, starting with "User", even when the conversation is in Hindi, Hinglish or another language.
 11. Use this fixed phrasing, so the same fact is always worded the same way:
     - identity: "User's name is X", "User prefers to be called X", "User is a <year/role>"
-    - progress: "User is on Module N", "User has completed Module N"
+    - progress: "User is on Module N", "User has completed Module N", and for the topic the user is currently working on: "User is studying <topic>"
     - weak_topic: "User struggles with <topic>"
     - preference: "User prefers <...>"
     - goal: "User wants to <...>"
-    - other: a short plain sentence starting with "User"
+    - other: interests and hobbies as "User likes <X>"; anything else as a short plain sentence starting with "User"
 12. Use the full topic name, with the user's abbreviation in brackets if they used one: "dynamic programming (DP)". Keep names and numbers exactly as the user said them.
 13. Ignore greetings, thanks, small talk, and questions about course content that do not reveal anything about the user. "what is recursion?" alone is not a fact; "I don't understand recursion" is.
+    - A request about the current answer only ("explain this one in more detail") is NOT a fact.
+    - A standing request about how to explain from now on ("always explain things in detail, short answers don't work for me") IS a preference: "User prefers detailed explanations".
+    - The topic the user is currently working on ("abhi <topic> kar raha hoon", "ab <topic> start kiya") is always category progress: "User is studying <topic>".
 14. If the user corrects themselves, extract only the corrected information.
 15. If there is nothing worth remembering, return {"facts": []}.
 16. Give each fact exactly one category:
    - identity: who the user is (name, nickname, year, college, background)
-   - progress: where the user currently is in the course, or what they have completed
+   - progress: where the user currently is in the course (module and current topic), or what they have completed
    - weak_topic: a course or technical topic the user struggles with
    - preference: how the user likes to learn (language, explanation style, examples, format, pace)
    - goal: what the user wants to achieve
-   - other: a durable fact about the user that fits none of the above
+   - other: interests and hobbies, or any other durable fact about the user that fits none of the above
 
 Examples:
 
@@ -106,6 +109,29 @@ user: lecture ke English explanations bahut lambe aur heavy lagte hain
 Output:
 {"facts": [
   {"text": "User finds explanations in English hard to understand", "category": "other", "status": "active"}
+]}
+
+Conversation (current topic):
+user: abhi union-find kar raha hoon
+Output:
+{"facts": [
+  {"text": "User is studying union-find", "category": "progress", "status": "active"}
+]}
+
+Conversation (hobby):
+user: weekends pe chess khelta hoon
+Output:
+{"facts": [
+  {"text": "User likes chess", "category": "other", "status": "active"}
+]}
+
+Conversation (one-off request vs standing preference):
+user: is answer ko thoda simple karke batao
+assistant: Zaroor, ye raha simple version.
+user: waise lamba text padh ke kuch yaad nahi rehta, hamesha pehle pseudo-code dikhaya karo
+Output:
+{"facts": [
+  {"text": "User prefers seeing pseudo-code first", "category": "preference", "status": "active"}
 ]}
 
 Conversation (completed module):

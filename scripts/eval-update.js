@@ -51,9 +51,9 @@ function scenario(name, fn) {
   return { name, fn };
 }
 
-async function say(log, userId, content) {
+async function say(log, userId, content, metadata) {
   const messages = typeof content === 'string' ? [{ role: 'user', content }] : content;
-  const { results } = await engine.add(messages, { userId });
+  const { results } = await engine.add(messages, { userId, metadata });
   const shown = typeof content === 'string' ? content : content.map((m) => `${m.role}: ${m.content}`).join(' / ');
   log.push({ input: shown, events: results.map(({ event, text, previousText }) => ({ event, text, previousText })) });
   return results;
@@ -65,10 +65,20 @@ const mems = async (userId) => (await engine.getAll({ userId })).results;
 const SCENARIOS = [
   scenario('1. Module 2, then Module 3', async (log) => {
     const u = uid('s1');
-    await say(log, u, 'Main abhi Module 2 pe hoon');
-    await say(log, u, 'Ab main Module 3 pe aa gaya hoon');
+    await say(log, u, 'Main abhi Module 2 pe hoon', { sessionId: 'session_1' });
+    const createdAt = (await mems(u)).find((m) => MODULE_RE.test(m.text))?.createdAt;
+    await say(log, u, 'Ab main Module 3 pe aa gaya hoon', { sessionId: 'session_2' });
     const modules = (await mems(u)).filter((m) => MODULE_RE.test(m.text));
-    return { pass: modules.length === 1 && /module 3\b/i.test(modules[0].text), detail: modules.map((m) => m.text) };
+    const m = modules[0];
+    const pass =
+      modules.length === 1 &&
+      /module 3\b/i.test(m.text) &&
+      m.metadata?.sessionId === 'session_2' &&
+      m.createdAt === createdAt;
+    return {
+      pass,
+      detail: modules.map((x) => `${x.text}  metadata=${JSON.stringify(x.metadata)}  createdAt unchanged=${x.createdAt === createdAt}`),
+    };
   }),
 
   scenario('2. Module 3 khatam, then Module 4 shuru', async (log) => {
@@ -141,10 +151,25 @@ const SCENARIOS = [
     return { pass: weak.length === 2, detail: weak.map((m) => m.text) };
   }),
 
-  scenario('9. short explanations, then detailed', async (log) => {
-    const u = uid('s9');
+  scenario('9a. short explanations, then one-off "isko detail mein samjhao"', async (log) => {
+    const u = uid('s9a');
     await say(log, u, 'mujhe short explanations chahiye');
-    await say(log, u, 'ab detail mein samjhao');
+    const before = (await mems(u)).filter((m) => m.category === 'preference');
+    await say(log, u, 'isko detail mein samjhao');
+    const after = (await mems(u)).filter((m) => m.category === 'preference');
+    const shortPref = after.find((m) => m.id === before[0]?.id);
+    const pass =
+      before.length === 1 &&
+      after.length === 1 &&
+      shortPref?.text === before[0].text &&
+      /short|brief|concise/i.test(shortPref.text);
+    return { pass, detail: after.map((m) => m.text) };
+  }),
+
+  scenario('9b. short explanations, then standing "hamesha detail mein samjhaya karo"', async (log) => {
+    const u = uid('s9b');
+    await say(log, u, 'mujhe short explanations chahiye');
+    await say(log, u, 'short se samajh nahi aata, hamesha detail mein samjhaya karo');
     const len = (await mems(u)).filter((m) => m.category === 'preference' && /short|brief|concise|detail/i.test(m.text));
     return { pass: len.length === 1 && /detail/i.test(len[0].text), detail: len.map((m) => m.text) };
   }),

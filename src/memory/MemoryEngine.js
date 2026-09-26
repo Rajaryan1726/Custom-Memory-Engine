@@ -116,7 +116,8 @@ async function planActions(facts, candidateLists) {
     [...memoriesById.values()].map(({ id, text, category }) => ({ id, text, category }))
   );
   decisions.forEach((d, k) => {
-    plan[pending[k]] = { ...d, previousText: d.memoryId ? memoriesById.get(d.memoryId)?.text : undefined };
+    const previous = d.memoryId ? memoriesById.get(d.memoryId) : undefined;
+    plan[pending[k]] = { ...d, previousText: previous?.text, previousMetadata: previous?.metadata };
   });
   return plan;
 }
@@ -204,10 +205,13 @@ export function createMemoryEngine({
     const newVectors = needVector.length ? await embedMany(needVector.map(([, p]) => p.text)) : [];
     const vectorFor = new Map(needVector.map(([i], k) => [i, newVectors[k]]));
     for (const [i, p] of updates) {
+      // Old metadata merged with this add()'s metadata, new values winning (e.g. the latest
+      // sessionId). createdAt is kept by the store.
       await store.updateMemory(userId, p.memoryId, {
         text: p.text,
         vector: vectorFor.get(i) ?? embedded[i].vector,
         category: embedded[i].category,
+        metadata: { ...(p.previousMetadata ?? {}), ...metadata, source: extraction },
       });
       results[i] = { id: p.memoryId, text: p.text, event: 'UPDATE', previousText: p.previousText };
     }
