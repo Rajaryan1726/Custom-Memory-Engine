@@ -12,7 +12,8 @@
     "db:logs": "docker compose logs -f qdrant",
     "check": "node scripts/check-setup.js",
     "test:llm": "node scripts/test-llm.js",
-    "test:store": "node scripts/test-vector-store.js"
+    "test:store": "node scripts/test-vector-store.js",
+    "playground": "node scripts/playground.js"
   },
   "keywords": [],
   "license": "ISC",
