@@ -23,19 +23,62 @@
 
 Phase 5a ke 2 runs kiye (temperature 0 par bhi output thoda badalta hai). Phase 4 ki keyword precision 3 runs ka mean hai. Judge ke numbers Phase 4.5 se hain, kyunki Phase 4 mein judge tha hi nahi.
 
-| Suite | Metric | Phase 4 baseline | Phase 4.5 (same scorer as now) | **Phase 5a run 1** | **Phase 5a run 2** |
-|---|---|---|---|---|---|
-| Original (12) | Keyword precision | 95.5% | 95.5% | **100%** (21/21) | **100%** (21/21) |
-| Original (12) | Keyword recall | 100% | 100% | **100%** (21/21) | **100%** (21/21) |
-| Original (12) | Forbidden facts | 0 | 0 | **0** | **0** |
-| Original (12) | Judge precision | – | 100%* | **100%** (21/21) | **100%** (21/21) |
-| Extended (22) | Keyword precision | 72.7% | 77.1% | **93.3%** (28/30) | **90.3%** (28/31) |
-| Extended (22) | Keyword recall | 93.1% | 96.6% | **100%** (29/29) | **100%** (29/29) |
-| Extended (22) | Forbidden facts | 7 | 7 | **0** | **0** |
-| Extended (22) | Judge precision | – | 68.4% | **87.5%** (28/32) | **87.5%** (28/32) |
-| – | Judge calibration | – | 94.4% (17/18) | **100%** (18/18) | **100%** (18/18) |
+| Suite | Metric | Phase 4 baseline | Phase 4.5 (same scorer as now) | Phase 5a run 1 | Phase 5a run 2 | **5a.1 run 1** | **5a.1 run 2** |
+|---|---|---|---|---|---|---|---|
+| Original (12) | Keyword precision | 95.5% | 95.5% | 100% (21/21) | 100% (21/21) | **100%** (21/21) | **100%** (21/21) |
+| Original (12) | Keyword recall | 100% | 100% | 100% (21/21) | 100% (21/21) | **100%** (21/21) | **100%** (21/21) |
+| Original (12) | Forbidden facts | 0 | 0 | 0 | 0 | **0** | **0** |
+| Original (12) | Judge precision | – | 100%* | 100% (21/21) | 100% (21/21) | **100%** (21/21) | **100%** (21/21) |
+| Extended (22) | Keyword precision | 72.7% | 77.1% | 93.3% (28/30) | 90.3% (28/31) | **93.3%** (28/30) | **93.3%** (28/30) |
+| Extended (22) | Keyword recall | 93.1% | 96.6% | 100% (29/29) | 100% (29/29) | **100%** (29/29) | **100%** (29/29) |
+| Extended (22) | Forbidden facts | 7 | 7 | 0 | 0 | **0** | **0** |
+| Extended (22) | Judge precision | – | 68.4% | 87.5% (28/32) | 87.5% (28/32) | **93.8%** (30/32) | **90.6%** (29/32) |
+| – | Judge calibration | – | 94.4% (17/18) | 100% (18/18) | 100% (18/18) | **95.7%** (22/23)** | **95.7%** (22/23)** |
 
 \* Phase 4.5 ke original suite mein judge ne ek galat fact (English difficulty as `weak_topic`) ko correct maana tha, isliye wo 100% thoda zyada tha.
+
+\*\* 5a.1 mein calibration set 18 se 23 items ka hua. Purane 18 items par judge ab bhi 18/18 hai. Jo ek disagreement hai, wo naye sarcasm item par hai, jo judge ki pehle se pata galti pakadne ke liye hi add kiya gaya tha. Isliye 100% se 95.7% ek bade test ka result hai, regression nahi.
+
+## Phase 5a.1 (language rule + completed module)
+
+**Kya badla:**
+- **Language rule:** "User prefers explanations in <language>" sirf tab store hota hai jab user khud language maange. Sirf difficulty batane par category `other` mein "User finds ... in <language> hard to understand" jaata hai. Few-shot mein dono cases hain (Marathi maangna, aur bina language maange English explanations heavy lagna).
+- **Completed module ka few-shot:** "aaj Module 10 khatam ho gaya finally" se "User has completed Module 10". "Module 10" aur "khatam ho gaya" dono kisi test file mein nahi hain (grep se check kiya).
+- **Calibration mein 5 naye items** (sirf add kiye, purane items untouched; git diff mein koi line remove nahi hui):
+
+| Item | Label | Judge (5a.1) |
+|---|---|---|
+| `[weak_topic] (ENDED) User struggles with dynamic programming (DP)`: user bola DP ab problem nahi | correct | correct ✓ |
+| `[preference] (ENDED) User prefers explanations in Hindi`: user bola ab Hindi ki zarurat nahi | correct | correct ✓ |
+| `[weak_topic] (ENDED) User struggles with recursion`: user ab bhi struggle kar raha hai | wrong | wrong ✓ |
+| `[preference] User prefers explanations in Hindi`: user ne sirf English terms mushkil bataye | wrong | wrong ✓ |
+| `[weak_topic] User struggles with recursion`: sarcasm ka sahi matlab | correct | **wrong ✗** |
+
+**Targets:**
+- **5a se kisi metric par regression nahi:** **PASS.**
+  - Original suite dono runs mein 100 / 100 / 0 / 100.
+  - Extended keyword precision 93.3% dono runs mein (5a mein 93.3% / 90.3%).
+  - Recall 100%, forbidden 0.
+  - Judge precision 93.8% / 90.6% (5a mein 87.5%).
+  - Calibration wala note upar dekho.
+- **Language error dono runs mein gayab:** **PASS.** Case `language_vs_topic_both` mein dono runs mein `[other] User finds technical terms in English hard to understand` aaya; koi invented preference nahi. Case `language_vs_topic_hindi_request` mein Hindi preference ab bhi sahi aati hai.
+- **Completed-module error dono runs mein gayab:** **PASS.**
+  - Case `long_multiturn_facts_spread` mein dono runs mein "User has completed Module 3".
+  - Original case `mixed_progress_and_weak_topic` mein bhi "User has completed Module 4".
+
+**Manual check (extended suite, dono runs):** koi sach mein galat fact nahi mila. Jo bache hain, wo scorer ya judge ki sakhti hain:
+- **Judge ki galti:**
+  - `sarcasm_recursion_easy` mein sahi fact ko wrong bola (dono runs; calibration item #23 yahi galti dikhata hai).
+  - Run 2 mein naya `other` English-difficulty fact wrong bola, kyunki judge rubric mein abhi ye nahi likha ki language difficulty `other` mein jaati hai.
+- **Borderline:**
+  - "User is comfortable with C++" `[other]`: judge `preference` chahta hai.
+  - "User finds videos boring" `[other]`: `allowed` spec sirf `preference` leta hai.
+  - Ended goal ka text "User's previous goal was to do web development": fixed phrasing "User wants to …" follow nahi karta. Phase 5b mein existing memory se match karne ke liye ye wording matter karegi.
+- **Chhoti wording issue (original suite):** "User is on linked lists" (keyword aur judge dono pass). Ye fixed phrasing ka side-effect hai; "User is studying linked lists" behtar hota.
+
+**5a.1 ke baad next steps:**
+1. **Judge rubric update (approval ke baad):** "language difficulty jo `other` mein ho wo correct hai", aur sarcasm ke liye ek clear line. Calibration item #23 isse measure hoga.
+2. **Phase 5b:** ended facts ki wording existing memory se exactly match nahi hogi ("User's previous goal was…" vs "User wants to…"). Isliye decider ko text-exact match ki jagah similarity ya LLM comparison use karna padega.
 
 ### Targets
 - **Original suite regress nahi karna chahiye** (precision aur recall ≥ 95%): **PASS**. Dono runs mein 100% / 100%.

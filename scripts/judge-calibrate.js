@@ -43,7 +43,8 @@ async function main() {
   const c = await runCalibration();
   console.log(`Judge calibration, model ${c.judgeModel}\n`);
   for (const r of c.items) {
-    console.log(`${r.agree ? 'AGREE   ' : 'DISAGREE'}  label=${r.label.padEnd(7)} judge=${r.verdict.padEnd(8)} [${r.fact.category}] ${r.fact.text}`);
+    const ended = r.fact.status === 'ended' ? ' (ENDED)' : '';
+    console.log(`${r.agree ? 'AGREE   ' : 'DISAGREE'}  label=${r.label.padEnd(7)} judge=${r.verdict.padEnd(8)} [${r.fact.category}]${ended} ${r.fact.text}`);
     console.log(`          case: ${r.id}  (${r.why})`);
     console.log(`          judge reason: ${r.reason}`);
   }

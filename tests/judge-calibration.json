@@ -308,6 +308,91 @@
       },
       "label": "correct",
       "why": "real topic next to a language difficulty"
+    },
+    {
+      "id": "correct_19_negation_resolved_weakness",
+      "source": "negation_resolved_weakness",
+      "messages": [
+        {
+          "role": "user",
+          "content": "ab mujhe DP mein dikkat nahi hai, practice se clear ho gaya"
+        }
+      ],
+      "fact": {
+        "text": "User struggles with dynamic programming (DP)",
+        "category": "weak_topic",
+        "status": "ended"
+      },
+      "label": "correct",
+      "why": "correct ended fact (weak_topic): user said DP is no longer a problem"
+    },
+    {
+      "id": "correct_20_calibration_only_ended_preference",
+      "source": "calibration_only_ended_preference",
+      "messages": [
+        {
+          "role": "user",
+          "content": "ab Hindi mein samjhane ki zarurat nahi, English mein bhi theek hai ab"
+        }
+      ],
+      "fact": {
+        "text": "User prefers explanations in Hindi",
+        "category": "preference",
+        "status": "ended"
+      },
+      "label": "correct",
+      "why": "correct ended fact (preference): user said they no longer need Hindi"
+    },
+    {
+      "id": "wrong_21_roman_hindi_weak_topic",
+      "source": "roman_hindi_weak_topic",
+      "messages": [
+        {
+          "role": "user",
+          "content": "mujhe recursion samajh nahi aata yaar, base case pe hi atak jaata hoon"
+        }
+      ],
+      "fact": {
+        "text": "User struggles with recursion",
+        "category": "weak_topic",
+        "status": "ended"
+      },
+      "label": "wrong",
+      "why": "wrong ended fact: user still struggles, never said it ended"
+    },
+    {
+      "id": "wrong_22_language_vs_topic_both",
+      "source": "language_vs_topic_both",
+      "messages": [
+        {
+          "role": "user",
+          "content": "technical terms English mein samajh nahi aate, par graphs mein toh genuinely problem hai"
+        }
+      ],
+      "fact": {
+        "text": "User prefers explanations in Hindi",
+        "category": "preference",
+        "status": "active"
+      },
+      "label": "wrong",
+      "why": "invented language preference: user only said English terms are hard"
+    },
+    {
+      "id": "correct_23_sarcasm_recursion_easy",
+      "source": "sarcasm_recursion_easy",
+      "messages": [
+        {
+          "role": "user",
+          "content": "haan haan, recursion toh bahut easy hai, bas 3 din se ek hi question pe atka hoon 🙃"
+        }
+      ],
+      "fact": {
+        "text": "User struggles with recursion",
+        "category": "weak_topic",
+        "status": "active"
+      },
+      "label": "correct",
+      "why": "sarcasm read correctly (Phase 5a judge wrongly marked this wrong)"
     }
   ]
 }

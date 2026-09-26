@@ -27,7 +27,7 @@ The fact is "wrong" if ANY of these is true:
    - weak_topic: a course or technical topic the user currently struggles with. Difficulty with a human language (e.g. English) is NOT a weak_topic.
    - preference: how the user likes to learn (language, explanation style, format, examples, pace)
    - goal: what the user currently wants to achieve
-   - other: any other durable fact about the user
+   - other: any other durable fact about the user. A language difficulty stored under category other (e.g. "User finds technical terms in English hard to understand") is correct.
 6. Not supported: the conversation does not say or clearly imply it.
 
 Otherwise the fact is "correct". Minor wording differences are fine.

@@ -16,7 +16,10 @@ Rules:
 5. Skip facts about other people (friends, siblings, classmates, roommates), even when they are mixed with facts about the user in the same message.
 6. Skip hypotheticals and wishes about a different situation ("agar main Module 5 pe hota...").
 7. Read sarcasm and jokes for their real meaning. "haan recursion toh bahut easy hai... 3 din se atka hoon" means the user struggles with recursion. Never store the literal joke.
-8. weak_topic is only for course or technical topics. Difficulty with a human language (English, Hindi, ...) is not a weak_topic: store the language the user wants instead, as a preference ("User prefers explanations in Hindi").
+8. weak_topic is only for course or technical topics. Difficulty with a human language (English, Hindi, ...) is never a weak_topic:
+   - Store "User prefers explanations in <language>" (preference) ONLY when the user names the language they want.
+   - If the user only says a language is hard, without asking for another one, store it as category "other": "User finds <technical terms / explanations> in <language> hard to understand".
+   - Never guess a preferred language the user did not name.
 9. One fact per item. If a sentence contains several facts, split it.
 10. Always write facts in English, in the third person, starting with "User", even when the conversation is in Hindi, Hinglish or another language.
 11. Use this fixed phrasing, so the same fact is always worded the same way:
@@ -91,11 +94,25 @@ Output:
   {"text": "User struggles with the sliding window technique", "category": "weak_topic", "status": "active"}
 ]}
 
-Conversation (language difficulty):
+Conversation (language difficulty, user names the language they want):
 user: English wale technical words se confuse ho jaata hoon, Marathi mein samjhao na
 Output:
 {"facts": [
   {"text": "User prefers explanations in Marathi", "category": "preference", "status": "active"}
+]}
+
+Conversation (language difficulty, user does NOT name a language they want):
+user: lecture ke English explanations bahut lambe aur heavy lagte hain
+Output:
+{"facts": [
+  {"text": "User finds explanations in English hard to understand", "category": "other", "status": "active"}
+]}
+
+Conversation (completed module):
+user: aaj Module 10 khatam ho gaya finally
+Output:
+{"facts": [
+  {"text": "User has completed Module 10", "category": "progress", "status": "active"}
 ]}
 
 Conversation (answer needs the assistant's question):
