@@ -1,0 +1,63 @@
+{
+  "description": "Synthetic students with memories written the way the LLM extractor writes them (English, third person). Queries mix English and Hinglish, like real student messages sent to the RAG app. expected = memory keys that count as a correct hit; [] means nothing stored is relevant.",
+  "students": {
+    "stu_raj": {
+      "raj_name": { "text": "User's name is Raj", "category": "identity" },
+      "raj_module": { "text": "User is on Module 3", "category": "progress" },
+      "raj_recursion": { "text": "User struggles with recursion", "category": "weak_topic" },
+      "raj_code_examples": { "text": "User learns quickly with code examples", "category": "preference" },
+      "raj_goal": { "text": "User wants to crack placements at a product company", "category": "goal" },
+      "raj_hindi": { "text": "User prefers explanations in Hindi", "category": "preference" },
+      "raj_night": { "text": "User studies late at night after college", "category": "other" }
+    },
+    "stu_priya": {
+      "priya_name": { "text": "User's name is Priya", "category": "identity" },
+      "priya_college": { "text": "User is a second-year CS student at VIT", "category": "identity" },
+      "priya_module": { "text": "User has finished Module 5", "category": "progress" },
+      "priya_dp": { "text": "User struggles with dynamic programming", "category": "weak_topic" },
+      "priya_bullets": { "text": "User prefers short explanations with bullet points", "category": "preference" },
+      "priya_goal": { "text": "User wants to get a Google internship", "category": "goal" },
+      "priya_python": { "text": "User is comfortable with Python but not C++", "category": "other" },
+      "priya_graphs": { "text": "User finds graphs easy", "category": "other" }
+    },
+    "stu_arjun": {
+      "arjun_name": { "text": "User's name is Arjun", "category": "identity" },
+      "arjun_module": { "text": "User is on Module 1", "category": "progress" },
+      "arjun_new": { "text": "User is new to programming", "category": "identity" },
+      "arjun_pointers": { "text": "User struggles with pointers", "category": "weak_topic" },
+      "arjun_diagrams": { "text": "User learns best from diagrams", "category": "preference" },
+      "arjun_switch": { "text": "User wants to switch careers from mechanical engineering to software", "category": "goal" },
+      "arjun_weekends": { "text": "User can study only on weekends", "category": "other" }
+    },
+    "stu_neha": {
+      "neha_name": { "text": "User's name is Neha", "category": "identity" },
+      "neha_module": { "text": "User is on Module 4 studying linked lists", "category": "progress" },
+      "neha_complexity": { "text": "User struggles with time complexity analysis", "category": "weak_topic" },
+      "neha_video": { "text": "User prefers video explanations over text", "category": "preference" },
+      "neha_project": { "text": "User's goal is to build a full-stack project", "category": "goal" },
+      "neha_gate": { "text": "User is preparing for GATE", "category": "goal" },
+      "neha_cricket": { "text": "User likes cricket", "category": "other" }
+    }
+  },
+  "queries": [
+    { "userId": "stu_raj", "query": "which module is the student on?", "expected": ["raj_module"] },
+    { "userId": "stu_raj", "query": "mujhe recursion ka koi example do", "expected": ["raj_recursion"] },
+    { "userId": "stu_raj", "query": "is student ko kaise samjhana chahiye?", "expected": ["raj_code_examples", "raj_hindi"] },
+    { "userId": "stu_raj", "query": "what is the student's name?", "expected": ["raj_name"] },
+    { "userId": "stu_raj", "query": "what is the capital of France?", "expected": [] },
+    { "userId": "stu_priya", "query": "how should I format my answer for this student?", "expected": ["priya_bullets"] },
+    { "userId": "stu_priya", "query": "DP ka ye question samjhao", "expected": ["priya_dp"] },
+    { "userId": "stu_priya", "query": "student ka career goal kya hai?", "expected": ["priya_goal"] },
+    { "userId": "stu_priya", "query": "which programming language should I use in examples?", "expected": ["priya_python"] },
+    { "userId": "stu_priya", "query": "binary search tree mein insert kaise karte hain?", "expected": [] },
+    { "userId": "stu_arjun", "query": "pointers kya hote hain?", "expected": ["arjun_pointers"] },
+    { "userId": "stu_arjun", "query": "how much time can the student give to studying?", "expected": ["arjun_weekends"] },
+    { "userId": "stu_arjun", "query": "student ka background kya hai?", "expected": ["arjun_new", "arjun_switch"] },
+    { "userId": "stu_arjun", "query": "tell me a joke", "expected": [] },
+    { "userId": "stu_arjun", "query": "thanks bhai", "expected": [] },
+    { "userId": "stu_neha", "query": "explain linked list reversal", "expected": ["neha_module"] },
+    { "userId": "stu_neha", "query": "merge sort ki time complexity kya hai?", "expected": ["neha_complexity"] },
+    { "userId": "stu_neha", "query": "should I send this student a video or notes?", "expected": ["neha_video"] },
+    { "userId": "stu_neha", "query": "what's the weather like today?", "expected": [] }
+  ]
+}

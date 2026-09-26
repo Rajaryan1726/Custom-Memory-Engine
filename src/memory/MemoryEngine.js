@@ -1,6 +1,7 @@
 import config from '../config/index.js';
 import { embed, embedMany } from '../llm/embed.js';
 import { createVectorStore } from '../stores/vectorStore.js';
+import { extractFacts } from './extractor.js';
 
 function requireUserId(userId, method) {
   if (typeof userId !== 'string' || !userId.trim()) {
@@ -21,16 +22,23 @@ function toResult(memory) {
 }
 
 // ---- add() pipeline steps -------------------------------------------------
-// A later phase replaces selectTexts() with LLM extraction; the other steps stay.
+// select (naive or LLM) -> embed -> store. Only the select step differs by mode.
+
+const EXTRACTION_MODES = ['llm', 'naive'];
 
 /**
  * Naive selection: every non-blank "user" message becomes one memory.
  * Returns [{ text, category }].
  */
-function selectTexts(messages) {
+function selectTextsNaive(messages) {
   return messages
     .filter((m) => m?.role === 'user' && typeof m.content === 'string' && m.content.trim())
     .map((m) => ({ text: m.content.trim(), category: null }));
+}
+
+/** LLM selection: extracted facts about the user. Returns [{ text, category }]. */
+async function selectTextsLlm(messages) {
+  return extractFacts(messages);
 }
 
 /** Embeds all candidate texts in one call. Returns candidates with a vector attached. */
@@ -40,14 +48,14 @@ async function embedCandidates(candidates) {
 }
 
 /** Stores embedded candidates. Returns [{ id, text, event }]. */
-async function storeCandidates(store, userId, embedded, metadata) {
+async function storeCandidates(store, userId, embedded, metadata, source) {
   const ids = await store.addMemories(
     userId,
     embedded.map((c) => ({
       text: c.text,
       vector: c.vector,
       category: c.category,
-      metadata: { ...metadata, source: 'naive' },
+      metadata: { ...metadata, source },
     }))
   );
   return embedded.map((c, i) => ({ id: ids[i], text: c.text, event: 'ADD' }));
@@ -55,7 +63,16 @@ async function storeCandidates(store, userId, embedded, metadata) {
 
 // ---- engine ---------------------------------------------------------------
 
-export function createMemoryEngine({ collection = config.memory.collection } = {}) {
+export function createMemoryEngine({
+  collection = config.memory.collection,
+  extraction = 'llm',
+} = {}) {
+  if (!EXTRACTION_MODES.includes(extraction)) {
+    throw new Error(
+      `createMemoryEngine: extraction must be one of ${EXTRACTION_MODES.join(', ')}, got "${extraction}".`
+    );
+  }
+  const selectTexts = extraction === 'llm' ? selectTextsLlm : selectTextsNaive;
   const store = createVectorStore({ collection });
 
   let readyPromise = null;
@@ -75,12 +92,12 @@ export function createMemoryEngine({ collection = config.memory.collection } = {
       throw new Error('MemoryEngine.add: messages must be an array of { role, content }.');
     }
 
-    const candidates = selectTexts(messages);
+    const candidates = await selectTexts(messages);
     if (candidates.length === 0) return { results: [] };
 
     await ready();
     const embedded = await embedCandidates(candidates);
-    const results = await storeCandidates(store, userId, embedded, metadata);
+    const results = await storeCandidates(store, userId, embedded, metadata, extraction);
     return { results };
   }
 

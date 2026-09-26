@@ -1,0 +1,126 @@
+[
+  {
+    "name": "hinglish_identity_weak_topic_progress",
+    "messages": [
+      { "role": "user", "content": "Hi, main Raj hoon aur main recursion samajhne mein struggle kar raha hoon" },
+      { "role": "assistant", "content": "Koi baat nahi, chalo step by step samajhte hain" },
+      { "role": "user", "content": "Main abhi Module 2 pe hoon" }
+    ],
+    "expected": [
+      { "category": "identity", "mustInclude": ["Raj"] },
+      { "category": "weak_topic", "mustInclude": ["recursion"] },
+      { "category": "progress", "mustInclude": ["Module 2"] }
+    ]
+  },
+  {
+    "name": "english_identity_weak_topic",
+    "messages": [
+      { "role": "user", "content": "I'm Priya, a second-year CS student. Dynamic programming is really hard for me." }
+    ],
+    "expected": [
+      { "category": "identity", "mustInclude": ["Priya"] },
+      { "category": "identity", "mustInclude": ["second-year"] },
+      { "category": "weak_topic", "mustInclude": ["dynamic programming"] }
+    ]
+  },
+  {
+    "name": "mixed_progress_and_weak_topic",
+    "messages": [
+      { "role": "user", "content": "Hey! I just finished Module 4, ab linked lists pe hoon but pointers bahut confuse karte hain" }
+    ],
+    "expected": [
+      { "category": "progress", "mustInclude": ["Module 4"] },
+      { "category": "progress", "mustInclude": ["linked list"] },
+      { "category": "weak_topic", "mustInclude": ["pointer"] }
+    ]
+  },
+  {
+    "name": "small_talk_only",
+    "messages": [
+      { "role": "user", "content": "hello!" },
+      { "role": "assistant", "content": "Hi! How can I help you today?" },
+      { "role": "user", "content": "nothing much, thanks. bye!" }
+    ],
+    "expected": []
+  },
+  {
+    "name": "three_facts_one_message",
+    "messages": [
+      { "role": "user", "content": "I'm Arjun, I'm on Module 5, and I learn best from diagrams." }
+    ],
+    "expected": [
+      { "category": "identity", "mustInclude": ["Arjun"] },
+      { "category": "progress", "mustInclude": ["Module 5"] },
+      { "category": "preference", "mustInclude": ["diagram"] }
+    ]
+  },
+  {
+    "name": "answer_needs_assistant_context",
+    "messages": [
+      { "role": "assistant", "content": "Which module are you currently on?" },
+      { "role": "user", "content": "3" },
+      { "role": "assistant", "content": "And which topic feels hardest so far?" },
+      { "role": "user", "content": "graphs honestly" }
+    ],
+    "expected": [
+      { "category": "progress", "mustInclude": ["Module 3"] },
+      { "category": "weak_topic", "mustInclude": ["graph"] }
+    ]
+  },
+  {
+    "name": "course_question_no_personal_fact",
+    "messages": [
+      { "role": "user", "content": "what is recursion?" },
+      { "role": "assistant", "content": "Recursion is when a function calls itself to solve smaller versions of the same problem." },
+      { "role": "user", "content": "and what is a base case?" }
+    ],
+    "expected": []
+  },
+  {
+    "name": "self_correction",
+    "messages": [
+      { "role": "user", "content": "Main Module 2 pe hoon... sorry, Module 3 pe hoon actually" }
+    ],
+    "expected": [
+      { "category": "progress", "mustInclude": ["Module 3"] }
+    ]
+  },
+  {
+    "name": "goal_hinglish",
+    "messages": [
+      { "role": "user", "content": "placement ke liye DSA strong karna hai" }
+    ],
+    "expected": [
+      { "category": "goal", "mustInclude": ["placement", "DSA"] }
+    ]
+  },
+  {
+    "name": "language_preference_hinglish",
+    "messages": [
+      { "role": "user", "content": "Mujhe Hindi mein explain karo please, English mein technical cheezein samajh nahi aati" }
+    ],
+    "expected": [
+      { "category": "preference", "mustInclude": ["Hindi"] }
+    ]
+  },
+  {
+    "name": "explanation_style_english",
+    "messages": [
+      { "role": "user", "content": "Please keep explanations short. I prefer bullet points over long paragraphs." }
+    ],
+    "expected": [
+      { "category": "preference", "mustInclude": ["short"] },
+      { "category": "preference", "mustInclude": ["bullet"] }
+    ]
+  },
+  {
+    "name": "mixed_goal_and_weak_topic",
+    "messages": [
+      { "role": "user", "content": "Mera goal hai 3 mahine mein Google ka interview crack karna, but DP mein main bahut weak hoon" }
+    ],
+    "expected": [
+      { "category": "goal", "mustInclude": ["Google"] },
+      { "category": "weak_topic", "mustInclude": ["DP"] }
+    ]
+  }
+]

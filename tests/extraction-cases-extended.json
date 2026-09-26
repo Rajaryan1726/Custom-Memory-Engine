@@ -1,0 +1,286 @@
+[
+  {
+    "name": "roman_hindi_weak_topic",
+    "covers": "Roman Hindi only",
+    "messages": [
+      { "role": "user", "content": "mujhe recursion samajh nahi aata yaar, base case pe hi atak jaata hoon" }
+    ],
+    "expected": [
+      { "category": "weak_topic", "mustInclude": ["recursion"] }
+    ]
+  },
+  {
+    "name": "roman_hindi_identity_college",
+    "covers": "Roman Hindi only",
+    "messages": [
+      { "role": "user", "content": "main Amit hoon, NIT Patna se, 3rd year mein hoon" }
+    ],
+    "expected": [
+      { "category": "identity", "mustInclude": ["Amit"] },
+      { "category": "identity", "mustInclude": ["NIT Patna"] },
+      { "category": "identity", "mustInclude": ["3rd year"] }
+    ]
+  },
+  {
+    "name": "typos_hinglish_no_punct",
+    "covers": "Typos and no punctuation",
+    "messages": [
+      { "role": "user", "content": "bhai mai module 4 pe hu abhi stack queue smjh ni aara" }
+    ],
+    "expected": [
+      { "category": "progress", "mustInclude": ["module 4"] },
+      { "category": "weak_topic", "mustInclude": ["stack"] },
+      { "category": "weak_topic", "mustInclude": ["queue"] }
+    ]
+  },
+  {
+    "name": "typos_english_no_punct",
+    "covers": "Typos and no punctuation",
+    "messages": [
+      { "role": "user", "content": "im on modle 6 now and i realy dont get hashing" }
+    ],
+    "expected": [
+      { "category": "progress", "mustInclude": ["6"] },
+      { "category": "weak_topic", "mustInclude": ["hash"] }
+    ]
+  },
+  {
+    "name": "long_multiturn_facts_spread",
+    "covers": "Long multi-turn conversation, facts spread across turns and dependent on assistant questions",
+    "messages": [
+      { "role": "user", "content": "hello sir" },
+      { "role": "assistant", "content": "Hello! Aapka naam kya hai?" },
+      { "role": "user", "content": "Rohit" },
+      { "role": "assistant", "content": "Nice to meet you Rohit. Course mein kahan tak pahuche ho?" },
+      { "role": "user", "content": "module 3 kal khatam kiya" },
+      { "role": "assistant", "content": "Great! Koi topic mushkil lag raha hai?" },
+      { "role": "user", "content": "haan trees thode tough hain" },
+      { "role": "assistant", "content": "Theek hai. Aapko videos se padhna pasand hai ya notes se?" },
+      { "role": "user", "content": "notes, videos mein neend aa jaati hai" },
+      { "role": "assistant", "content": "Noted!" },
+      { "role": "user", "content": "ok thanks" }
+    ],
+    "expected": [
+      { "category": "identity", "mustInclude": ["Rohit"] },
+      { "category": "progress", "mustInclude": ["Module 3"] },
+      { "category": "weak_topic", "mustInclude": ["tree"] },
+      { "category": "preference", "mustInclude": ["notes"] }
+    ]
+  },
+  {
+    "name": "long_multiturn_mixed_with_course_questions",
+    "covers": "Long multi-turn conversation where most turns are course questions",
+    "messages": [
+      { "role": "user", "content": "sir ek doubt tha" },
+      { "role": "assistant", "content": "Haan bolo" },
+      { "role": "user", "content": "quick sort ka worst case kya hota hai" },
+      { "role": "assistant", "content": "Worst case O(n^2) hota hai jab pivot hamesha smallest ya largest element ho." },
+      { "role": "user", "content": "achha, aur merge sort ka?" },
+      { "role": "assistant", "content": "Merge sort hamesha O(n log n) hota hai." },
+      { "role": "user", "content": "ok. waise mujhe sorting algorithms yaad hi nahi rehte, har baar bhool jaata hoon" },
+      { "role": "assistant", "content": "Koi baat nahi, ek cheat sheet banate hain." },
+      { "role": "user", "content": "haan please, table format mein dena" }
+    ],
+    "expected": [
+      { "category": "weak_topic", "mustInclude": ["sort"] },
+      { "category": "preference", "mustInclude": ["table"] }
+    ]
+  },
+  {
+    "name": "time_change_module",
+    "covers": "Time change: old state vs current state",
+    "messages": [
+      { "role": "user", "content": "pichle hafte module 2 tha, ab module 4 pe hoon" }
+    ],
+    "expected": [
+      { "category": "progress", "mustInclude": ["Module 4"] }
+    ],
+    "forbidden": [
+      { "category": "progress", "mustInclude": ["Module 2"], "why": "stale state stored as a current fact" }
+    ]
+  },
+  {
+    "name": "time_change_goal",
+    "covers": "Time change: goal changed",
+    "messages": [
+      { "role": "user", "content": "pehle mujhe web development karna tha but ab ML engineer banna hai" }
+    ],
+    "expected": [
+      { "category": "goal", "mustInclude": ["ML"] }
+    ],
+    "forbidden": [
+      { "category": "goal", "mustInclude": ["web"], "why": "old goal stored as a current goal" }
+    ]
+  },
+  {
+    "name": "negation_resolved_weakness",
+    "covers": "Negation: user no longer struggles",
+    "messages": [
+      { "role": "user", "content": "ab mujhe DP mein dikkat nahi hai, practice se clear ho gaya" }
+    ],
+    "expected": [
+      { "category": ["progress", "other"], "mustInclude": ["DP"] }
+    ],
+    "forbidden": [
+      { "category": "weak_topic", "mustInclude": ["DP"], "why": "negation flipped: stored DP as a weak topic" }
+    ]
+  },
+  {
+    "name": "negation_knows_python_not_java",
+    "covers": "Negation",
+    "messages": [
+      { "role": "user", "content": "mujhe Java nahi aati, sirf Python aati hai, examples Python mein dena" }
+    ],
+    "expected": [
+      { "category": ["identity", "other", "progress", "preference"], "mustInclude": ["Python"] }
+    ],
+    "optional": [
+      { "category": ["identity", "other", "progress", "weak_topic"], "mustInclude": ["Java"] }
+    ]
+  },
+  {
+    "name": "other_person_friend_weak",
+    "covers": "Fact about another person",
+    "messages": [
+      { "role": "user", "content": "mera dost graphs mein weak hai, usko kaise help karun?" }
+    ],
+    "expected": [],
+    "forbidden": [
+      { "category": "any", "mustInclude": ["graph"], "why": "friend's weakness stored as the user's fact" }
+    ]
+  },
+  {
+    "name": "other_person_sister_vs_self",
+    "covers": "Fact about another person mixed with a real fact",
+    "messages": [
+      { "role": "user", "content": "meri behen Module 7 pe hai aur usko DP bahut pasand hai. main abhi Module 1 pe hoon" }
+    ],
+    "expected": [
+      { "category": "progress", "mustInclude": ["Module 1"] }
+    ],
+    "forbidden": [
+      { "category": "any", "mustInclude": ["Module 7"], "why": "sister's module stored as the user's" },
+      { "category": "any", "mustInclude": ["DP"], "why": "sister's preference stored as the user's" }
+    ]
+  },
+  {
+    "name": "hypothetical_module",
+    "covers": "Hypothetical",
+    "messages": [
+      { "role": "user", "content": "agar main module 5 pe hota to ye question easy lagta" }
+    ],
+    "expected": [],
+    "forbidden": [
+      { "category": "progress", "mustInclude": ["5"], "why": "hypothetical stored as real progress" }
+    ]
+  },
+  {
+    "name": "question_only_hinglish",
+    "covers": "Course question with no personal fact",
+    "messages": [
+      { "role": "user", "content": "binary search ka time complexity kya hota hai?" }
+    ],
+    "expected": []
+  },
+  {
+    "name": "question_about_order",
+    "covers": "Question that sounds personal but reveals nothing durable",
+    "messages": [
+      { "role": "user", "content": "kya mujhe DP se pehle recursion karna chahiye?" }
+    ],
+    "expected": []
+  },
+  {
+    "name": "sarcasm_recursion_easy",
+    "covers": "Sarcasm",
+    "messages": [
+      { "role": "user", "content": "haan haan, recursion toh bahut easy hai, bas 3 din se ek hi question pe atka hoon 🙃" }
+    ],
+    "expected": [
+      { "category": "weak_topic", "mustInclude": ["recursion"] }
+    ],
+    "forbidden": [
+      { "category": ["other", "progress", "preference"], "mustInclude": ["recursion", "easy"], "why": "sarcasm taken literally" }
+    ]
+  },
+  {
+    "name": "joke_virat_kohli",
+    "covers": "Joke",
+    "messages": [
+      { "role": "user", "content": "main toh coding ka Virat Kohli hoon 😎 jk, abhi basics hi seekh raha hoon" }
+    ],
+    "expected": [
+      { "category": "progress", "mustInclude": ["basics"] }
+    ],
+    "forbidden": [
+      { "category": "any", "mustInclude": ["Virat"], "why": "joke stored as a fact" }
+    ]
+  },
+  {
+    "name": "language_vs_topic_hindi_request",
+    "covers": "Language difficulty vs topic difficulty",
+    "messages": [
+      { "role": "user", "content": "English mein padhne mein dikkat hoti hai, Hindi mein samjhao na" }
+    ],
+    "expected": [
+      { "category": "preference", "mustInclude": ["Hindi"] }
+    ],
+    "optional": [
+      { "category": ["other", "preference"], "mustInclude": ["English"] }
+    ],
+    "forbidden": [
+      { "category": "weak_topic", "mustInclude": ["English"], "why": "language difficulty classified as a course weak topic" }
+    ]
+  },
+  {
+    "name": "language_vs_topic_both",
+    "covers": "Language difficulty vs topic difficulty in one message",
+    "messages": [
+      { "role": "user", "content": "technical terms English mein samajh nahi aate, par graphs mein toh genuinely problem hai" }
+    ],
+    "expected": [
+      { "category": "weak_topic", "mustInclude": ["graph"] }
+    ],
+    "optional": [
+      { "category": ["other", "preference"], "mustInclude": ["English"] }
+    ],
+    "forbidden": [
+      { "category": "weak_topic", "mustInclude": ["English"], "why": "language difficulty classified as a course weak topic" }
+    ]
+  },
+  {
+    "name": "nickname_preference",
+    "covers": "Multi-turn identity + preference",
+    "messages": [
+      { "role": "user", "content": "main Sneha hoon" },
+      { "role": "assistant", "content": "Hi Sneha!" },
+      { "role": "user", "content": "actually sab mujhe Snehu bulate hain, aap bhi wahi bulao" }
+    ],
+    "expected": [
+      { "category": "identity", "mustInclude": ["Sneha"] },
+      { "category": ["preference", "identity"], "mustInclude": ["Snehu"] }
+    ]
+  },
+  {
+    "name": "goal_with_routine",
+    "covers": "Goal plus study routine, Hinglish",
+    "messages": [
+      { "role": "user", "content": "Dec tak Amazon SDE intern crack karna hai, roz 2 ghante deta hoon DSA ko" }
+    ],
+    "expected": [
+      { "category": "goal", "mustInclude": ["Amazon"] },
+      { "category": ["other", "preference", "progress"], "mustInclude": ["2"] }
+    ]
+  },
+  {
+    "name": "assistant_context_language_choice",
+    "covers": "Answer that needs the assistant's question, Hinglish",
+    "messages": [
+      { "role": "assistant", "content": "Aapko coding ke liye kaunsi language comfortable hai?" },
+      { "role": "user", "content": "C++" }
+    ],
+    "expected": [
+      { "category": ["preference", "identity", "other"], "mustInclude": ["C++"] }
+    ]
+  }
+]

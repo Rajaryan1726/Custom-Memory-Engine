@@ -13,7 +13,14 @@
     "check": "node scripts/check-setup.js",
     "test:llm": "node scripts/test-llm.js",
     "test:store": "node scripts/test-vector-store.js",
-    "playground": "node scripts/playground.js"
+    "playground": "node scripts/playground.js",
+    "playground:naive": "node scripts/playground.js --naive",
+    "eval:extraction": "node scripts/eval-extraction.js",
+    "eval:extraction:extended": "node scripts/eval-extraction-extended.js",
+    "eval:retrieval": "node scripts/eval-retrieval.js",
+    "eval:robustness": "node scripts/eval-robustness.js",
+    "eval:perf": "node scripts/eval-perf.js",
+    "eval:report": "node scripts/eval-full-report.js"
   },
   "keywords": [],
   "license": "ISC",

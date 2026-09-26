@@ -3,6 +3,7 @@ import config from '../src/config/index.js';
 import { createMemoryEngine } from '../src/memory/MemoryEngine.js';
 
 const PLAYGROUND_COLLECTION = 'custom_user_memories_playground';
+const EXTRACTION = process.argv.includes('--naive') ? 'naive' : 'llm';
 
 function section(title) {
   console.log(`\n=== ${title} ===`);
@@ -14,7 +15,8 @@ function printAddResults({ results }) {
 }
 
 async function main() {
-  const memory = createMemoryEngine({ collection: PLAYGROUND_COLLECTION });
+  console.log(`Extraction mode: ${EXTRACTION}${EXTRACTION === 'llm' ? ' (use --naive for naive mode)' : ''}`);
+  const memory = createMemoryEngine({ collection: PLAYGROUND_COLLECTION, extraction: EXTRACTION });
   const student2Ids = new Set();
   const student1ResultIds = [];
 
@@ -66,7 +68,7 @@ async function main() {
   const all = await memory.getAll({ userId: 'student_1' });
   console.log(`  count: ${all.results.length}`);
   for (const r of all.results) {
-    console.log(`  ${r.createdAt}  ${r.text}  ${JSON.stringify(r.metadata)}`);
+    console.log(`  ${r.createdAt}  [${r.category ?? '-'}] ${r.text}  ${JSON.stringify(r.metadata)}`);
   }
   all.results.forEach((r) => student1ResultIds.push(r.id));
 
