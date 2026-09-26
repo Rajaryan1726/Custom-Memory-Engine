@@ -1,0 +1,313 @@
+{
+  "description": "Judge calibration set. Each item is one extracted fact with its conversation and a fixed human label. Do not edit labels to raise agreement.",
+  "items": [
+    {
+      "id": "wrong_01_time_change_module",
+      "source": "time_change_module",
+      "messages": [
+        {
+          "role": "user",
+          "content": "pichle hafte module 2 tha, ab module 4 pe hoon"
+        }
+      ],
+      "fact": {
+        "text": "User was on Module 2 last week",
+        "category": "progress"
+      },
+      "label": "wrong",
+      "why": "past as current"
+    },
+    {
+      "id": "wrong_02_time_change_goal",
+      "source": "time_change_goal",
+      "messages": [
+        {
+          "role": "user",
+          "content": "pehle mujhe web development karna tha but ab ML engineer banna hai"
+        }
+      ],
+      "fact": {
+        "text": "User initially wanted to do web development",
+        "category": "goal"
+      },
+      "label": "wrong",
+      "why": "past as current"
+    },
+    {
+      "id": "wrong_03_negation_resolved_weakness",
+      "source": "negation_resolved_weakness",
+      "messages": [
+        {
+          "role": "user",
+          "content": "ab mujhe DP mein dikkat nahi hai, practice se clear ho gaya"
+        }
+      ],
+      "fact": {
+        "text": "User no longer struggles with DP",
+        "category": "weak_topic"
+      },
+      "label": "wrong",
+      "why": "negation filed as a current weak topic"
+    },
+    {
+      "id": "wrong_04_sarcasm_recursion_easy",
+      "source": "sarcasm_recursion_easy",
+      "messages": [
+        {
+          "role": "user",
+          "content": "haan haan, recursion toh bahut easy hai, bas 3 din se ek hi question pe atka hoon 🙃"
+        }
+      ],
+      "fact": {
+        "text": "User finds recursion easy",
+        "category": "weak_topic"
+      },
+      "label": "wrong",
+      "why": "sarcasm read literally"
+    },
+    {
+      "id": "wrong_05_hypothetical_module",
+      "source": "hypothetical_module",
+      "messages": [
+        {
+          "role": "user",
+          "content": "agar main module 5 pe hota to ye question easy lagta"
+        }
+      ],
+      "fact": {
+        "text": "User would find the question easy if they were on Module 5",
+        "category": "progress"
+      },
+      "label": "wrong",
+      "why": "hypothetical as real"
+    },
+    {
+      "id": "wrong_06_other_person_sister_vs_self",
+      "source": "other_person_sister_vs_self",
+      "messages": [
+        {
+          "role": "user",
+          "content": "meri behen Module 7 pe hai aur usko DP bahut pasand hai. main abhi Module 1 pe hoon"
+        }
+      ],
+      "fact": {
+        "text": "User's sister is on Module 7",
+        "category": "other"
+      },
+      "label": "wrong",
+      "why": "about another person"
+    },
+    {
+      "id": "wrong_07_other_person_sister_vs_self",
+      "source": "other_person_sister_vs_self",
+      "messages": [
+        {
+          "role": "user",
+          "content": "meri behen Module 7 pe hai aur usko DP bahut pasand hai. main abhi Module 1 pe hoon"
+        }
+      ],
+      "fact": {
+        "text": "User's sister likes DP",
+        "category": "other"
+      },
+      "label": "wrong",
+      "why": "about another person"
+    },
+    {
+      "id": "wrong_08_language_vs_topic_both",
+      "source": "language_vs_topic_both",
+      "messages": [
+        {
+          "role": "user",
+          "content": "technical terms English mein samajh nahi aate, par graphs mein toh genuinely problem hai"
+        }
+      ],
+      "fact": {
+        "text": "User struggles with understanding technical terms in English",
+        "category": "weak_topic"
+      },
+      "label": "wrong",
+      "why": "language difficulty filed as weak_topic"
+    },
+    {
+      "id": "wrong_09_language_preference_hinglish",
+      "source": "language_preference_hinglish",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Mujhe Hindi mein explain karo please, English mein technical cheezein samajh nahi aati"
+        }
+      ],
+      "fact": {
+        "text": "User finds technical concepts difficult to understand in English",
+        "category": "weak_topic"
+      },
+      "label": "wrong",
+      "why": "language difficulty filed as weak_topic"
+    },
+    {
+      "id": "correct_10_hinglish_identity_weak_topic_progress",
+      "source": "hinglish_identity_weak_topic_progress",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hi, main Raj hoon aur main recursion samajhne mein struggle kar raha hoon"
+        },
+        {
+          "role": "assistant",
+          "content": "Koi baat nahi, chalo step by step samajhte hain"
+        },
+        {
+          "role": "user",
+          "content": "Main abhi Module 2 pe hoon"
+        }
+      ],
+      "fact": {
+        "text": "User's name is Raj",
+        "category": "identity"
+      },
+      "label": "correct",
+      "why": "stated directly"
+    },
+    {
+      "id": "correct_11_answer_needs_assistant_context",
+      "source": "answer_needs_assistant_context",
+      "messages": [
+        {
+          "role": "assistant",
+          "content": "Which module are you currently on?"
+        },
+        {
+          "role": "user",
+          "content": "3"
+        },
+        {
+          "role": "assistant",
+          "content": "And which topic feels hardest so far?"
+        },
+        {
+          "role": "user",
+          "content": "graphs honestly"
+        }
+      ],
+      "fact": {
+        "text": "User is on Module 3",
+        "category": "progress"
+      },
+      "label": "correct",
+      "why": "answer to the assistant's question"
+    },
+    {
+      "id": "correct_12_self_correction",
+      "source": "self_correction",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Main Module 2 pe hoon... sorry, Module 3 pe hoon actually"
+        }
+      ],
+      "fact": {
+        "text": "User is on Module 3",
+        "category": "progress"
+      },
+      "label": "correct",
+      "why": "corrected, final value"
+    },
+    {
+      "id": "correct_13_mixed_progress_and_weak_topic",
+      "source": "mixed_progress_and_weak_topic",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hey! I just finished Module 4, ab linked lists pe hoon but pointers bahut confuse karte hain"
+        }
+      ],
+      "fact": {
+        "text": "User struggles with pointers",
+        "category": "weak_topic"
+      },
+      "label": "correct",
+      "why": "stated directly"
+    },
+    {
+      "id": "correct_14_language_preference_hinglish",
+      "source": "language_preference_hinglish",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Mujhe Hindi mein explain karo please, English mein technical cheezein samajh nahi aati"
+        }
+      ],
+      "fact": {
+        "text": "User prefers explanations in Hindi",
+        "category": "preference"
+      },
+      "label": "correct",
+      "why": "stated directly"
+    },
+    {
+      "id": "correct_15_time_change_module",
+      "source": "time_change_module",
+      "messages": [
+        {
+          "role": "user",
+          "content": "pichle hafte module 2 tha, ab module 4 pe hoon"
+        }
+      ],
+      "fact": {
+        "text": "User is now on Module 4",
+        "category": "progress"
+      },
+      "label": "correct",
+      "why": "current state next to a past state"
+    },
+    {
+      "id": "correct_16_time_change_goal",
+      "source": "time_change_goal",
+      "messages": [
+        {
+          "role": "user",
+          "content": "pehle mujhe web development karna tha but ab ML engineer banna hai"
+        }
+      ],
+      "fact": {
+        "text": "User now wants to become a Machine Learning engineer",
+        "category": "goal"
+      },
+      "label": "correct",
+      "why": "current goal next to a past goal"
+    },
+    {
+      "id": "correct_17_other_person_sister_vs_self",
+      "source": "other_person_sister_vs_self",
+      "messages": [
+        {
+          "role": "user",
+          "content": "meri behen Module 7 pe hai aur usko DP bahut pasand hai. main abhi Module 1 pe hoon"
+        }
+      ],
+      "fact": {
+        "text": "User is currently on Module 1",
+        "category": "progress"
+      },
+      "label": "correct",
+      "why": "user's own fact next to the sister's"
+    },
+    {
+      "id": "correct_18_language_vs_topic_both",
+      "source": "language_vs_topic_both",
+      "messages": [
+        {
+          "role": "user",
+          "content": "technical terms English mein samajh nahi aate, par graphs mein toh genuinely problem hai"
+        }
+      ],
+      "fact": {
+        "text": "User has a genuine problem with graphs",
+        "category": "weak_topic"
+      },
+      "label": "correct",
+      "why": "real topic next to a language difficulty"
+    }
+  ]
+}

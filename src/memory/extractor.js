@@ -1,10 +1,13 @@
 import { chat } from '../llm/client.js';
+import { contentToText } from './messages.js';
 import { CATEGORIES, EXTRACTION_PROMPT } from './prompts.js';
 
 function toTranscript(messages) {
   return messages
-    .filter((m) => (m?.role === 'user' || m?.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
-    .map((m) => `${m.role}: ${m.content.trim()}`)
+    .filter((m) => m?.role === 'user' || m?.role === 'assistant')
+    .map((m) => ({ role: m.role, text: contentToText(m.content).trim() }))
+    .filter((m) => m.text)
+    .map((m) => `${m.role}: ${m.text}`)
     .join('\n');
 }
 
@@ -36,7 +39,7 @@ export async function extractFacts(messages) {
 
   // Facts only come from the user; without a user message there is nothing to extract.
   const hasUserText = messages.some(
-    (m) => m?.role === 'user' && typeof m.content === 'string' && m.content.trim()
+    (m) => m?.role === 'user' && contentToText(m.content).trim()
   );
   if (!hasUserText) return [];
 

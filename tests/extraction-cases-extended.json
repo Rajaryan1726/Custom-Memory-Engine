@@ -65,6 +65,9 @@
       { "category": "progress", "mustInclude": ["Module 3"] },
       { "category": "weak_topic", "mustInclude": ["tree"] },
       { "category": "preference", "mustInclude": ["notes"] }
+    ],
+    "allowed": [
+      { "category": "preference", "mustInclude": ["video"] }
     ]
   },
   {
@@ -106,7 +109,7 @@
       { "role": "user", "content": "pehle mujhe web development karna tha but ab ML engineer banna hai" }
     ],
     "expected": [
-      { "category": "goal", "mustInclude": ["ML"] }
+      { "category": "goal", "mustInclude": [["ML", "Machine Learning"]] }
     ],
     "forbidden": [
       { "category": "goal", "mustInclude": ["web"], "why": "old goal stored as a current goal" }
@@ -134,7 +137,7 @@
     "expected": [
       { "category": ["identity", "other", "progress", "preference"], "mustInclude": ["Python"] }
     ],
-    "optional": [
+    "allowed": [
       { "category": ["identity", "other", "progress", "weak_topic"], "mustInclude": ["Java"] }
     ]
   },
@@ -225,7 +228,7 @@
     "expected": [
       { "category": "preference", "mustInclude": ["Hindi"] }
     ],
-    "optional": [
+    "allowed": [
       { "category": ["other", "preference"], "mustInclude": ["English"] }
     ],
     "forbidden": [
@@ -241,7 +244,7 @@
     "expected": [
       { "category": "weak_topic", "mustInclude": ["graph"] }
     ],
-    "optional": [
+    "allowed": [
       { "category": ["other", "preference"], "mustInclude": ["English"] }
     ],
     "forbidden": [

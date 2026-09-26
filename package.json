@@ -17,6 +17,8 @@
     "playground:naive": "node scripts/playground.js --naive",
     "eval:extraction": "node scripts/eval-extraction.js",
     "eval:extraction:extended": "node scripts/eval-extraction-extended.js",
+    "eval:extraction:all": "node scripts/eval-extraction.js && node scripts/eval-extraction-extended.js",
+    "judge:calibrate": "node scripts/judge-calibrate.js",
     "eval:retrieval": "node scripts/eval-retrieval.js",
     "eval:robustness": "node scripts/eval-robustness.js",
     "eval:perf": "node scripts/eval-perf.js",

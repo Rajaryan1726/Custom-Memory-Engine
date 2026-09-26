@@ -35,6 +35,8 @@ const config = Object.freeze({
   openai: Object.freeze({
     apiKey: process.env.OPENAI_API_KEY.trim(),
     chatModel: process.env.CHAT_MODEL.trim(),
+    // Used only by the eval judge. Optional, defaults to gpt-4o-mini.
+    judgeModel: process.env.JUDGE_MODEL?.trim() || 'gpt-4o-mini',
     embeddingModel: process.env.EMBEDDING_MODEL.trim(),
     embeddingDim,
   }),

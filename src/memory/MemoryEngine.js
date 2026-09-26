@@ -2,6 +2,7 @@ import config from '../config/index.js';
 import { embed, embedMany } from '../llm/embed.js';
 import { createVectorStore } from '../stores/vectorStore.js';
 import { extractFacts } from './extractor.js';
+import { contentToText } from './messages.js';
 
 function requireUserId(userId, method) {
   if (typeof userId !== 'string' || !userId.trim()) {
@@ -32,8 +33,10 @@ const EXTRACTION_MODES = ['llm', 'naive'];
  */
 function selectTextsNaive(messages) {
   return messages
-    .filter((m) => m?.role === 'user' && typeof m.content === 'string' && m.content.trim())
-    .map((m) => ({ text: m.content.trim(), category: null }));
+    .filter((m) => m?.role === 'user')
+    .map((m) => contentToText(m.content).trim())
+    .filter(Boolean)
+    .map((text) => ({ text, category: null }));
 }
 
 /** LLM selection: extracted facts about the user. Returns [{ text, category }]. */

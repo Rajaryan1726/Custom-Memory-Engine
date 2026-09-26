@@ -110,7 +110,11 @@ async function edgeInputs(engine) {
     { name: 'very long message (~5000 chars, facts buried in the middle)', messages: [{ role: 'user', content: longMessage() }] },
     { name: 'emojis only', messages: [{ role: 'user', content: '😂😂🔥🔥👍🙏' }] },
     { name: 'Devanagari script', messages: [{ role: 'user', content: 'मेरा नाम रवि है, मैं मॉड्यूल 2 पर हूँ और मुझे रिकर्शन समझ नहीं आता' }] },
-    { name: 'multi-part content array (OpenAI format)', messages: [{ role: 'user', content: [{ type: 'text', text: 'Main Module 3 pe hoon' }] }] },
+    {
+      name: 'multi-part content array (OpenAI format)',
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'Main Module 3 pe hoon' }] }],
+      mustStore: /module 3/i,
+    },
     { name: 'messages not an array', messages: 'Main Module 3 pe hoon' },
     { name: 'missing userId', messages: [{ role: 'user', content: 'Main Module 3 pe hoon' }], userId: null },
   ];
@@ -128,12 +132,16 @@ async function edgeInputs(engine) {
     } catch (err) {
       outcome = { outcome: 'error', error: err.message };
     }
-    out.push({
+    const entry = {
       name: c.name,
       inputChars: typeof c.messages === 'string' ? c.messages.length : JSON.stringify(c.messages).length,
       ms: Math.round(performance.now() - start),
       ...outcome,
-    });
+    };
+    if (c.mustStore) {
+      entry.check = { mustStore: String(c.mustStore), pass: (outcome.stored ?? []).some((t) => c.mustStore.test(t)) };
+    }
+    out.push(entry);
   }
   await engine.deleteAll({ userId: 'edge_user' });
   return out;
@@ -178,7 +186,9 @@ async function main() {
     console.log(`  ${e.name}  [${e.inputChars} chars, ${e.ms} ms]`);
     console.log(`      -> ${e.outcome}${e.error ? `: ${e.error}` : ''}`);
     for (const s of e.stored ?? []) console.log(`         stored: ${s}`);
+    if (e.check) console.log(`      ${e.check.pass ? 'PASS' : 'FAIL'}  must store a fact matching ${e.check.mustStore}`);
   }
+  const edgeFailures = edges.filter((e) => e.check && !e.check.pass).length;
 
   console.log('\n=== Stale fact baseline (Module 2, then Module 3) ===');
   const stale = await staleFact(engine);
@@ -191,7 +201,7 @@ async function main() {
 
   const file = await saveResult('robustness', { runAt: new Date().toISOString(), isolation: iso, edgeInputs: edges, staleFact: stale });
   console.log(`\nSaved to ${file}`);
-  if (iso.leaks > 0 || iso.crossUserGetById.breaches > 0) process.exitCode = 1;
+  if (iso.leaks > 0 || iso.crossUserGetById.breaches > 0 || edgeFailures > 0) process.exitCode = 1;
 }
 
 try {

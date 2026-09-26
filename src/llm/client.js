@@ -33,8 +33,9 @@ export async function withRetry(fn) {
  * Sends one system + user message to the chat model.
  * Returns the reply text, or the parsed object when json is true.
  * temperature is optional; when omitted the model's default is used.
+ * model is optional; defaults to CHAT_MODEL.
  */
-export async function chat({ system, user, json = false, temperature }) {
+export async function chat({ system, user, json = false, temperature, model = config.openai.chatModel }) {
   if (typeof user !== 'string' || !user.trim()) {
     throw new Error('chat(): "user" must be a non-empty string.');
   }
@@ -51,7 +52,7 @@ export async function chat({ system, user, json = false, temperature }) {
 
   const response = await withRetry(() =>
     openai.chat.completions.create({
-      model: config.openai.chatModel,
+      model,
       messages,
       ...(json ? { response_format: { type: 'json_object' } } : {}),
       ...(temperature !== undefined ? { temperature } : {}),
