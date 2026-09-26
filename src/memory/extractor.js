@@ -1,6 +1,6 @@
 import { chat } from '../llm/client.js';
 import { contentToText } from './messages.js';
-import { CATEGORIES, EXTRACTION_PROMPT } from './prompts.js';
+import { CATEGORIES, EXTRACTION_PROMPT, STATUSES } from './prompts.js';
 
 function toTranscript(messages) {
   return messages
@@ -18,19 +18,24 @@ function normalizeFacts(facts) {
     const text = typeof item?.text === 'string' ? item.text.trim() : '';
     if (!text) continue;
 
-    const key = text.toLowerCase();
+    const rawStatus = typeof item.status === 'string' ? item.status.trim().toLowerCase() : '';
+    const status = STATUSES.includes(rawStatus) ? rawStatus : 'active';
+
+    // The same text can legitimately appear once as active and once as ended.
+    const key = `${text.toLowerCase()}|${status}`;
     if (seen.has(key)) continue;
     seen.add(key);
 
     const category = typeof item.category === 'string' ? item.category.trim().toLowerCase() : '';
-    result.push({ text, category: CATEGORIES.includes(category) ? category : 'other' });
+    result.push({ text, category: CATEGORIES.includes(category) ? category : 'other', status });
   }
   return result;
 }
 
 /**
  * Extracts durable facts about the user from a conversation.
- * messages: [{ role, content }]. Returns [{ text, category }].
+ * messages: [{ role, content }]. Returns [{ text, category, status }],
+ * where status is "active" (true now) or "ended" (the user said it is no longer true).
  */
 export async function extractFacts(messages) {
   if (!Array.isArray(messages)) {

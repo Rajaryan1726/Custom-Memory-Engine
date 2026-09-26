@@ -29,17 +29,17 @@ const EXTRACTION_MODES = ['llm', 'naive'];
 
 /**
  * Naive selection: every non-blank "user" message becomes one memory.
- * Returns [{ text, category }].
+ * Returns [{ text, category, status }].
  */
 function selectTextsNaive(messages) {
   return messages
     .filter((m) => m?.role === 'user')
     .map((m) => contentToText(m.content).trim())
     .filter(Boolean)
-    .map((text) => ({ text, category: null }));
+    .map((text) => ({ text, category: null, status: 'active' }));
 }
 
-/** LLM selection: extracted facts about the user. Returns [{ text, category }]. */
+/** LLM selection: extracted facts about the user. Returns [{ text, category, status }]. */
 async function selectTextsLlm(messages) {
   return extractFacts(messages);
 }
@@ -96,12 +96,18 @@ export function createMemoryEngine({
     }
 
     const candidates = await selectTexts(messages);
-    if (candidates.length === 0) return { results: [] };
+    // Until the update/dedupe step exists (Phase 5b), "ended" facts are not applied
+    // to storage; they are returned so callers can see them.
+    const active = candidates.filter((c) => c.status !== 'ended');
+    const skipped = candidates
+      .filter((c) => c.status === 'ended')
+      .map((c) => ({ id: null, text: c.text, event: 'SKIPPED_ENDED' }));
+    if (active.length === 0) return { results: skipped };
 
     await ready();
-    const embedded = await embedCandidates(candidates);
-    const results = await storeCandidates(store, userId, embedded, metadata, extraction);
-    return { results };
+    const embedded = await embedCandidates(active);
+    const stored = await storeCandidates(store, userId, embedded, metadata, extraction);
+    return { results: [...stored, ...skipped] };
   }
 
   async function search(query, { userId, limit = 5, category, scoreThreshold } = {}) {

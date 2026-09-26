@@ -122,7 +122,7 @@
       { "role": "user", "content": "ab mujhe DP mein dikkat nahi hai, practice se clear ho gaya" }
     ],
     "expected": [
-      { "category": ["progress", "other"], "mustInclude": ["DP"] }
+      { "category": "weak_topic", "status": "ended", "mustInclude": [["DP", "dynamic programming"]] }
     ],
     "forbidden": [
       { "category": "weak_topic", "mustInclude": ["DP"], "why": "negation flipped: stored DP as a weak topic" }

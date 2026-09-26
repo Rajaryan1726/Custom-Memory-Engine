@@ -8,6 +8,7 @@
 //   category:    a category, a list of acceptable categories, or "any"
 //   mustInclude: keywords that must all appear (case-insensitive); an inner array means "any of",
 //                e.g. [["ML", "Machine Learning"]]
+//   status:      "active" (default) or "ended"; a fact only matches if its status matches too
 import { readFile } from 'node:fs/promises';
 import config from '../src/config/index.js';
 import { extractFacts } from '../src/memory/extractor.js';
@@ -21,6 +22,7 @@ function categoryMatches(actual, wanted) {
 }
 
 export function matches(fact, spec) {
+  if ((fact.status ?? 'active') !== (spec.status ?? 'active')) return false;
   if (!categoryMatches(fact.category, spec.category)) return false;
   const text = fact.text.toLowerCase();
   return spec.mustInclude.every((kw) =>
@@ -31,8 +33,11 @@ export function matches(fact, spec) {
 function describe(spec) {
   const cat = Array.isArray(spec.category) ? spec.category.join('|') : spec.category;
   const kws = spec.mustInclude.map((k) => (Array.isArray(k) ? `(${k.map((a) => `"${a}"`).join(' or ')})` : `"${k}"`));
-  return `[${cat}] must include ${kws.join(', ')}`;
+  const status = spec.status && spec.status !== 'active' ? ` (status: ${spec.status})` : '';
+  return `[${cat}]${status} must include ${kws.join(', ')}`;
 }
+
+const factLabel = (f) => `[${f.category}]${f.status === 'ended' ? ' (ENDED)' : ''} ${f.text}`;
 
 const pct = (x) => (x === null ? 'n/a' : `${(x * 100).toFixed(1)}%`);
 const ratio = (num, den) => (den === 0 ? null : num / den);
@@ -84,11 +89,11 @@ function printCase(r) {
     const kwTag = r.matchedExpected.includes(f) ? 'expected' : r.matchedAllowed.includes(f) ? 'allowed ' : 'UNEXPECTED';
     const j = r.judge?.facts[i];
     const jTag = j ? (j.verdict === 'correct' ? 'correct' : `${j.verdict.toUpperCase()}: ${j.reason}`) : '-';
-    console.log(`      extracted: [${f.category}] ${f.text}`);
+    console.log(`      extracted: ${factLabel(f)}`);
     console.log(`                 keyword: ${kwTag}   judge: ${jTag}`);
   });
   for (const e of r.missed) console.log(`      KEYWORD MISSED: ${describe(e)}`);
-  for (const h of r.forbiddenHits) console.log(`      FORBIDDEN:      [${h.fact.category}] ${h.fact.text}  <- ${h.why}`);
+  for (const h of r.forbiddenHits) console.log(`      FORBIDDEN:      ${factLabel(h.fact)}  <- ${h.why}`);
   console.log();
 }
 

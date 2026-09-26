@@ -10,7 +10,11 @@ const MAX_CONCURRENT = 5;
 const JUDGE_PROMPT = `You are a strict evaluator of a memory-extraction system for an online coding course.
 The system reads a conversation between a student ("user") and a tutor ("assistant") and extracts long-term facts about the student.
 
-You receive the conversation and ONE extracted fact with its category. Decide whether the fact is correct.
+You receive the conversation and ONE extracted fact with its category and status. Decide whether the fact is correct.
+
+Status:
+- "active": the fact is claimed to be true now.
+- "ended": the fact is claimed to be NO LONGER true. The text describes what used to be true (e.g. "User struggles with dynamic programming (DP)"), with the category it had while it was true. An "ended" fact is correct if the user said that thing is no longer true. It is wrong if the user did not say it ended.
 
 The fact is "wrong" if ANY of these is true:
 1. Wrong polarity: it states the opposite of what the user means. This includes negations read wrongly (e.g. the user says they no longer struggle with a topic, but the fact is filed as a current weak topic) and sarcasm or jokes read literally.
@@ -88,7 +92,7 @@ export async function judgeFact(messages, fact) {
       chat({
         model: config.openai.judgeModel,
         system: JUDGE_PROMPT,
-        user: `Conversation:\n${transcript(messages)}\n\nExtracted fact:\n[${fact.category}] ${fact.text}`,
+        user: `Conversation:\n${transcript(messages)}\n\nExtracted fact:\n[${fact.category}] (status: ${fact.status ?? 'active'}) ${fact.text}`,
         json: true,
         temperature: 0,
       })
