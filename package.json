@@ -21,6 +21,7 @@
     "judge:calibrate": "node scripts/judge-calibrate.js",
     "eval:retrieval": "node scripts/eval-retrieval.js",
     "eval:robustness": "node scripts/eval-robustness.js",
+    "eval:update": "node scripts/eval-update.js",
     "eval:perf": "node scripts/eval-perf.js",
     "eval:report": "node scripts/eval-full-report.js"
   },

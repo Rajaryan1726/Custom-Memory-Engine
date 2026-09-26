@@ -122,3 +122,91 @@ Output:
 {"facts": [
   {"text": "User prefers real-life examples", "category": "preference", "status": "active"}
 ]}`;
+
+export const DECIDER_ACTIONS = ['ADD', 'UPDATE', 'DELETE', 'NOOP'];
+
+export const DECIDER_PROMPT = `You maintain a student's long-term memory. You receive NEW facts just extracted from a conversation, and EXISTING memories about the same student that might be related. Decide what to do with each new fact.
+
+Input format:
+- New facts: "<index>. [<category>] (<status>) <text>". status is "active" (true now) or "ended" (the student said it is no longer true).
+- Existing memories: "<id>. [<category>] <text>". ids are short labels like m1, m2.
+
+Return ONLY JSON of this form:
+{"actions": [{"fact": <index>, "action": "ADD" | "UPDATE" | "DELETE" | "NOOP", "memory": "<id or null>", "text": "<final memory text, UPDATE only>"}]}
+
+Actions:
+- ADD: the fact is new information. "memory" is null.
+- NOOP: an existing memory already says the same thing, even in different words. "memory" is that memory's id.
+- UPDATE: the fact is a newer or more specific version of the same thing as an existing memory. "memory" is the id to replace, "text" is the new memory text (normally the new fact's text).
+- DELETE: only for a fact with status "ended", when an existing memory states that same thing. "memory" is the id to delete.
+
+Rules:
+1. Progress has two separate slots:
+   - module position: "User is on Module N" / "User has completed Module N"
+   - current topic: "User is on <topic>" / "User is studying <topic>"
+   A new module fact replaces the old module fact. A new topic fact replaces the old topic fact. A module fact never replaces a topic fact, and a topic fact never replaces a module fact.
+2. Preference: a changed preference about the same aspect (explanation length, explanation language, format) replaces the old one. Preferences about different aspects are different memories.
+3. Goal: a more specific version of the same goal replaces it.
+4. weak_topic: different topics are different memories (recursion and graphs both stay). The same topic said again is NOOP.
+5. A fact with status "ended" is never ADDed and never UPDATEs anything. If an existing memory states the same thing, DELETE it; if no existing memory matches, return NOOP with "memory": null.
+6. Every new fact gets exactly one action. Each existing memory is the target of at most one UPDATE or DELETE.
+7. Never touch a memory that is unrelated to the new facts.
+
+Examples:
+
+New facts:
+0. [progress] (active) User is on Module 15
+Existing memories:
+m1. [progress] User is on Module 14
+m2. [progress] User is studying tries
+Output:
+{"actions": [{"fact": 0, "action": "UPDATE", "memory": "m1", "text": "User is on Module 15"}]}
+
+New facts:
+0. [progress] (active) User is studying segment trees
+Existing memories:
+m1. [progress] User is on Module 16
+m2. [progress] User is studying tries
+Output:
+{"actions": [{"fact": 0, "action": "UPDATE", "memory": "m2", "text": "User is studying segment trees"}]}
+
+New facts:
+0. [weak_topic] (active) User struggles with backtracking
+Existing memories:
+m1. [weak_topic] User finds backtracking problems confusing
+Output:
+{"actions": [{"fact": 0, "action": "NOOP", "memory": "m1"}]}
+
+New facts:
+0. [weak_topic] (ended) User struggles with bit manipulation
+Existing memories:
+m1. [weak_topic] User struggles with bit manipulation
+m2. [weak_topic] User struggles with backtracking
+Output:
+{"actions": [{"fact": 0, "action": "DELETE", "memory": "m1"}]}
+
+New facts:
+0. [weak_topic] (ended) User struggles with the sliding window technique
+Existing memories:
+m1. [weak_topic] User struggles with tries
+Output:
+{"actions": [{"fact": 0, "action": "NOOP", "memory": null}]}
+
+New facts:
+0. [weak_topic] (active) User struggles with segment trees
+Existing memories:
+m1. [weak_topic] User struggles with backtracking
+Output:
+{"actions": [{"fact": 0, "action": "ADD", "memory": null}]}
+
+New facts:
+0. [preference] (active) User prefers step-by-step walkthroughs
+1. [preference] (active) User prefers examples in Kotlin
+Existing memories:
+m1. [preference] User prefers one-line answers
+m2. [preference] User prefers flowcharts over text
+Output:
+{"actions": [
+  {"fact": 0, "action": "UPDATE", "memory": "m1", "text": "User prefers step-by-step walkthroughs"},
+  {"fact": 1, "action": "ADD", "memory": null}
+]}`;

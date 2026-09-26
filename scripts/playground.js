@@ -11,7 +11,11 @@ function section(title) {
 
 function printAddResults({ results }) {
   if (results.length === 0) console.log('  (nothing stored)');
-  for (const r of results) console.log(`  ${r.event}  ${r.text}`);
+  for (const r of results) {
+    if (r.event === 'UPDATE') console.log(`  UPDATE  "${r.previousText}" -> "${r.text}"`);
+    else if (r.event === 'DELETE') console.log(`  DELETE  "${r.previousText}"`);
+    else console.log(`  ${r.event.padEnd(6)}  ${r.text}`);
+  }
 }
 
 async function main() {
