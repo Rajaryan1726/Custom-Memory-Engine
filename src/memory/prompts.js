@@ -31,8 +31,11 @@ Rules:
     - other: interests and hobbies as "User likes <X>"; anything else as a short plain sentence starting with "User"
 12. Use the full topic name, with the user's abbreviation in brackets if they used one: "dynamic programming (DP)". Keep names and numbers exactly as the user said them.
 13. Ignore greetings, thanks, small talk, and questions about course content that do not reveal anything about the user. "what is recursion?" alone is not a fact; "I don't understand recursion" is.
-    - A request about the current answer only ("explain this one in more detail") is NOT a fact.
-    - A standing request about how to explain from now on ("always explain things in detail, short answers don't work for me") IS a preference: "User prefers detailed explanations".
+    - Preferences: a request about the current answer or explanation is NEVER a fact, even if it mentions a style. Signals: it points at this answer or topic ("isko", "ye", "this", "is question ko", "abhi"), or it is a one-time instruction ("explain this one in more detail").
+    - Store "User prefers ..." only when the user states a lasting wish ("hamesha", "har baar", "aage se", "from now on", "always") or describes how they learn in general ("mujhe short answers se kuch samajh nahi aata"): "User prefers detailed explanations".
+    - When unsure whether a request is one-time or lasting, do not store it.
+    - Exception, language: a request for a language ("<language> mein samjhao", "<language> mein batao", "explain in <language>") is ALWAYS a preference, even though it looks like a request: "User prefers explanations in <language>".
+    - Exception, format: a general complaint about a FORMAT of explanation (length, theory vs practice, text vs video, pace) is a preference, not "other". Store the format the user would rather have, e.g. a complaint that something is too long means the user prefers it shorter.
     - The topic the user is currently working on ("abhi <topic> kar raha hoon", "ab <topic> start kiya") is always category progress: "User is studying <topic>".
 14. If the user corrects themselves, extract only the corrected information.
 15. If there is nothing worth remembering, return {"facts": []}.
@@ -105,7 +108,7 @@ Output:
 ]}
 
 Conversation (language difficulty, user does NOT name a language they want):
-user: lecture ke English explanations bahut lambe aur heavy lagte hain
+user: lecture ki English itni bhaari lagti hai ki aadha samajh hi nahi aata
 Output:
 {"facts": [
   {"text": "User finds explanations in English hard to understand", "category": "other", "status": "active"}
@@ -132,6 +135,25 @@ user: waise lamba text padh ke kuch yaad nahi rehta, hamesha pehle pseudo-code d
 Output:
 {"facts": [
   {"text": "User prefers seeing pseudo-code first", "category": "preference", "status": "active"}
+]}
+
+Conversation (one-off request, English):
+user: can you explain this more simply?
+Output:
+{"facts": []}
+
+Conversation (general complaint about a format, Hinglish):
+user: theory-heavy chapters se kuch palle nahi padta, hands-on kaam jaldi dimaag mein baithta hai
+Output:
+{"facts": [
+  {"text": "User prefers practical, hands-on explanations", "category": "preference", "status": "active"}
+]}
+
+Conversation (how the user learns in general, English):
+user: honestly I only get things once I see them drawn out on a whiteboard
+Output:
+{"facts": [
+  {"text": "User prefers visual explanations drawn out step by step", "category": "preference", "status": "active"}
 ]}
 
 Conversation (completed module):

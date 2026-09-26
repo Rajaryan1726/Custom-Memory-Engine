@@ -167,3 +167,122 @@ add "isko detail mein samjhao"
 - Temperature 0 par bhi gpt-4o-mini same input par hamesha same output nahi deta.
 
 **Decider fallbacks:** 0.
+
+---
+
+## Phase 6.1: one-off requests ko preference banne se rokna
+
+**Code under test:** Phase 6.1 working tree (uncommitted; HEAD = `0610fd6 phase 6`). Sirf `EXTRACTION_PROMPT` ka preference rule aur few-shots badle. Decider untouched.
+
+### Kya badla
+- **Preference rule (rule 13):**
+  - Current answer ya explanation ke baare mein request **kabhi fact nahi**, chahe style mention ho. Signals: "isko", "ye", "this", "is question ko", "abhi", ya ek baar ka instruction.
+  - "User prefers …" sirf tab jab lasting wish ho ("hamesha", "har baar", "aage se", "from now on", "always"), ya user general tarike se bataye ki wo kaise seekhta hai.
+  - Doubt ho to store mat karo.
+- **Naya English few-shot pair:**
+  - "can you explain this more simply?" → `{"facts": []}`
+  - "honestly I only get things once I see them drawn out on a whiteboard" → `User prefers visual explanations drawn out step by step`
+- **Wording check (grep, dono taraf):**
+  - Prompt ke naye terms kisi `tests/*.json` mein nahi hain.
+  - Naye test cases ke terms prompt mein nahi hain, **sirf "lambe" ek exception hai**: wo Phase 5a.1 ke *language-difficulty* few-shot mein pehle se hai ("English explanations bahut lambe aur heavy lagte hain", jo `other` banta hai). Is phase mein wo example chhua nahi.
+- **3 naye extended cases:**
+  - `one_off_request_english`: "could you go over that part again, but slower?" → expected `[]`, koi preference forbidden
+  - `one_off_request_hinglish_2`: "ye wala example ek baar aur chhote steps mein samjha do" → expected `[]`, koi preference forbidden
+  - `standing_preference_without_keyword`: "mujhe lambe answers padhne mein bore hota hai" → expected preference (short / concise / brief / long)
+- **Naya script:** `npm run eval:pref-stability`. Counts env vars se aate hain: `PREF_ONE_OFF_RUNS` (default 20) aur `PREF_STANDING_RUNS` (default 10).
+
+### Stability measurement
+
+| Measurement | Target | Result |
+|---|---|---|
+| `extractFacts` akele, 9a message ("isko detail mein samjhao"), 20 baar | 0/20 preference | **0/20: PASS** |
+| `extractFacts` akele, 9b message ("short se samajh nahi aata, hamesha detail mein samjhaya karo"), 10 baar | 10/10 preference | **10/10: PASS** (har baar "User prefers detailed explanations") |
+| `EVAL_RUNS=5 npm run eval:update:9a` | – | **9a 5/5, 9b 5/5.** Is run ke andar `extractFacts` akele bhi 0/5. Fallbacks 0. |
+
+- Pehle (Phase 6 wrap-up) 9a message par preference ~1/10 baar banti thi. Ab 30 calls mein 0 baar (20 akele, 5 scenario ke andar, 5 akele 9a run mein).
+- Agar asli rate ab bhi 10% hota, to 0/20 aane ka chance ~12% hai. Isliye ye strong evidence hai, proof nahi.
+
+### Full regression
+
+| Eval | 5c / Phase 6 | **6.1** |
+|---|---|---|
+| Judge calibration | 95.7% (22/23) | **95.7%** (22/23), same sarcasm item |
+| Original (12): keyword P / R / forbidden / judge P | 100 / 100 / 0 / 100% | **100 / 100 / 0 / 100%** |
+| Extended keyword precision | 93.5% (29/31, 25 cases) | **90.3%** (28/31, 28 cases) |
+| Extended keyword recall | 100% (30/30) | **93.5%** (29/31) |
+| Extended forbidden | 0 | **0** |
+| Extended judge precision | 90.9% | **94.1%** (32/34) |
+| Update suite (`eval:update`, 1 run) | 16/16 | **16/16**, fallbacks 0 |
+| Robustness | 0 leaks, 0/90, 0/540, 0/10, legacy 4/4 | **wahi sab PASS** |
+
+**Target "koi metric regress na ho": MISS** (extended keyword precision aur recall). Do wajah:
+
+1. **Purane case mein regression: `language_vs_topic_hindi_request`.** "English mein padhne mein dikkat hoti hai, Hindi mein samjhao na" se ab sirf `[other] User finds reading in English hard to understand` aaya. **"User prefers explanations in Hindi" gayab ho gaya.**
+   - Naya one-off rule "Hindi mein samjhao" ko ek baar ki request padh raha hai (koi "hamesha" nahi), aur ye language rule ko override kar deta hai.
+   - Asli student ke liye ye nuksaan hai: tutor Hindi mein jawab dena band kar dega.
+   - Original suite ka `language_preference_hinglish` ("Mujhe Hindi mein explain karo please…") abhi bhi sahi hai, isliye problem "samjhao na" jaisi request wording par hai.
+2. **Naya case `standing_preference_without_keyword`:** "mujhe lambe answers padhne mein bore hota hai" se `[other] User finds long answers boring` bana, preference nahi.
+   - Info bachi hai, lekin `other` sirf vector search se context mein aata hai, profile se nahi. Isliye ye har jawab mein short answers ka signal nahi dega.
+   - "Doubt ho to store mat karo" rule, aur "lambe" wala purana language few-shot, dono iski wajah ho sakte hain. Maine test nahi kiya ki asli wajah kaunsi hai.
+
+**Purane 25 cases par alag se:**
+- Recall 29/30 = 96.7% (5c mein 100%), yaani sirf Hindi wala regression.
+- Precision 28/30 = 93.3% (5c mein 93.5%), lagbhag same.
+
+**Jo sahi hua:** dono naye one-off cases (English aur Hinglish) ne kuch extract nahi kiya, aur `explanation_style_english` ("Please keep explanations short…") ki dono preferences ab bhi bani.
+
+### Next steps (approval ke baad)
+1. **Language rule ko one-off rule se exempt karo:** "<language> mein samjhao/batao" hamesha preference hai, kyunki language ek baar ke liye nahi maangi jaati. Ek few-shot bhi.
+2. **General-learning few-shot:** "X padhne mein bore hota hai / X se kuch samajh nahi aata" wala ek Hinglish example jo preference banaye, taaki "doubt ho to skip" rule isko `other` mein na bheje.
+3. Dono ke baad `eval:pref-stability` aur `eval:extraction:all` dobara chalao.
+
+---
+
+## Phase 6.2: 6.1 ke do regressions fix
+
+**Code under test:** Phase 6.2 working tree (uncommitted; HEAD = `0610fd6 phase 6`, 6.1 ke changes bhi uncommitted). Sirf `EXTRACTION_PROMPT` badla. Decider aur expected outputs untouched.
+
+### Kya badla
+- **Language exception:** "<language> mein samjhao", "<language> mein batao", "explain in <language>" hamesha preference hain ("User prefers explanations in <language>"), chahe request jaisi lagein. Ye one-off rule ka explicit exception hai.
+- **Format exception:** explanation ke FORMAT (length, theory vs practice, text vs video, pace) ki general complaint preference hai, `other` nahi. User jo format chahta hai wahi store hota hai.
+- **Naya Hinglish few-shot:** "theory-heavy chapters se kuch palle nahi padta, hands-on kaam jaldi dimaag mein baithta hai" → `User prefers practical, hands-on explanations`. Isme koi word kisi test case se share nahi hota; "lambe", "bore", "padhne" aur "answers" prompt ke few-shots mein nahi hain.
+- **5a.1 language few-shot reword:** "lecture ke English explanations bahut lambe aur heavy lagte hain" → "lecture ki English itni bhaari lagti hai ki aadha samajh hi nahi aata". Output wahi hai (`other`: "User finds explanations in English hard to understand"). "lambe" ab prompt mein kahin nahi.
+
+### Wording overlap (few-shot conversations vs `tests/*.json` conversations, dono taraf)
+Word-level script se check kiya; function words (hai, mein, ko, …) chhod diye. **Jo overlap abhi bhi bacha hai:**
+- **Marathi language few-shot (5a.1):** "samjhao", "technical", "confuse", "English". Ye language cases (`language_vs_topic_*`, `mixed_progress_and_weak_topic`) se share hote hain.
+- **Pseudo-code few-shot (5c):** "hamesha", "yaad", "waise" (`long_multiturn_mixed_with_course_questions`).
+- **Ek-ek word:** "khatam" (long multiturn), "clear" (negation), "khelta" (hobby), "karke" (one-off), "dikhaya" (standing request), "trees" ("segment trees" mein).
+- **Generic words:** "pasand", "pehle", "gaya", "module", "question", "student", "year", "thanks", "hello", "help" wagairah.
+- **Rule text (few-shot nahi):**
+  - 6.1 ka example "mujhe short answers se kuch samajh nahi aata" mein "answers" hai, jo `standing_preference_without_keyword` mein bhi hai.
+  - Format rule ka "too long … prefers it shorter" meaning mein us case ke answer ke kareeb hai (spec ne yahi meaning maangi thi).
+
+### Results
+
+| Measurement | Target | 6.1 | **6.2** |
+|---|---|---|---|
+| `eval:pref-stability`: one-off (9a message) | 0/20 | 0/20 | **0/20 PASS** |
+| `eval:pref-stability`: standing (9b message) | 10/10 | 10/10 | **10/10 PASS** |
+| `language_vs_topic_hindi_request` | Hindi preference | ✗ (sirf `other`) | **✓ "User prefers explanations in Hindi"** |
+| `standing_preference_without_keyword` ("lambe answers … bore") | preference | ✗ (`other`) | **✓ "User prefers shorter answers"** |
+| `EVAL_RUNS=5 eval:update:9a` | – | 9a 5/5, 9b 5/5 | **9a 5/5, 9b 5/5**; extractFacts alone 0/5; fallbacks 0 |
+
+| Regression | 5c / Phase 6 baseline | 6.1 | **6.2** |
+|---|---|---|---|
+| Judge calibration | 95.7% (22/23) | 95.7% | **95.7%** (same sarcasm item) |
+| Original (12): P / R / forbidden / judge P | 100 / 100 / 0 / 100% | same | **100 / 100 / 0 / 100%** |
+| Extended keyword precision | 93.5% | 90.3% | **93.8%** (30/32) |
+| Extended keyword recall | 100% | 93.5% | **100%** (31/31) |
+| Extended forbidden | 0 | 0 | **0** |
+| Extended judge precision | 90.9% | 94.1% | **91.2%** (31/34) |
+| Update suite (1 run) | 16/16 | 16/16 | **16/16**, fallbacks 0 |
+| Robustness | 0 leaks, 0/90, 0/540, 0/10, legacy 4/4 | same | **same, sab PASS** |
+
+**Saare targets PASS.**
+- Judge precision 91.2% hai, jo 5c ke 90.9% se upar hai. 6.1 ke 94.1% se neeche hai, lekin 6.1 baseline nahi tha.
+- Judge ke 3 WRONG verdicts wahi purani galtiyan hain: sarcasm (calibration item #23), aur Python / C++ ki category par sakhti. Koi naya galat fact nahi.
+- Language-difficulty case (`language_vs_topic_both`) ab bhi sahi hai: `[other] User finds technical terms in English hard to understand`. Koi language guess nahi hui.
+- Dono naye one-off cases (English aur Hinglish) ab bhi kuch extract nahi karte.
+
+**Limitation:** har eval sirf ek run hai (sirf pref-stability aur 9a repeated hain). Extraction suites ka 1 run temperature 0 wale drift ko poori tarah nahi pakadta.

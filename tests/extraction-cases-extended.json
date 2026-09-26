@@ -322,5 +322,39 @@
     "allowed": [
       { "category": "other", "mustInclude": ["coding"] }
     ]
+  },
+  {
+    "name": "one_off_request_english",
+    "covers": "One-off request about the current explanation, English",
+    "messages": [
+      { "role": "assistant", "content": "Here is how the two pointers move through the array." },
+      { "role": "user", "content": "could you go over that part again, but slower?" }
+    ],
+    "expected": [],
+    "forbidden": [
+      { "category": "preference", "mustInclude": [], "why": "one-off request stored as a standing preference" }
+    ]
+  },
+  {
+    "name": "one_off_request_hinglish_2",
+    "covers": "One-off request about the current explanation, Hinglish, different wording from update scenario 9a",
+    "messages": [
+      { "role": "assistant", "content": "Ye raha binary tree traversal ka example." },
+      { "role": "user", "content": "ye wala example ek baar aur chhote steps mein samjha do" }
+    ],
+    "expected": [],
+    "forbidden": [
+      { "category": "preference", "mustInclude": [], "why": "one-off request stored as a standing preference" }
+    ]
+  },
+  {
+    "name": "standing_preference_without_keyword",
+    "covers": "Standing preference stated without hamesha / always / from now on",
+    "messages": [
+      { "role": "user", "content": "mujhe lambe answers padhne mein bore hota hai" }
+    ],
+    "expected": [
+      { "category": "preference", "mustInclude": [["short", "concise", "brief", "long"]] }
+    ]
   }
 ]
