@@ -1,0 +1,13 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.18.3
+    container_name: memory-engine-qdrant
+    restart: unless-stopped
+    ports:
+      # REST API + dashboard only. gRPC (6334) is intentionally not exposed.
+      - "${QDRANT_PORT:-6333}:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+
+volumes:
+  qdrant_storage:
