@@ -11,7 +11,8 @@
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f qdrant",
     "check": "node scripts/check-setup.js",
-    "test:llm": "node scripts/test-llm.js"
+    "test:llm": "node scripts/test-llm.js",
+    "test:store": "node scripts/test-vector-store.js"
   },
   "keywords": [],
   "license": "ISC",
