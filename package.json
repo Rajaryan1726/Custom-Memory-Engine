@@ -1,6 +1,6 @@
 {
   "name": "custom-memory-engine",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A memory layer for AI apps (Mem0-style), backed by Qdrant and OpenAI.",
   "type": "module",
   "exports": "./src/index.js",

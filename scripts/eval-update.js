@@ -318,6 +318,22 @@ const SCENARIOS = [
     return { pass, detail: [`in includeArchived: ${stillThere}, history: ${JSON.stringify(hist)}, get: ${JSON.stringify(got)}`] };
   }),
 
+  scenario('17. finish one topic, start the next', async (log) => {
+    const u = uid('s17');
+    await say(log, u, 'Abhi main arrays ke questions kar raha hoon');
+    await say(log, u, 'arrays wala section complete ho gaya, aaj se strings pe kaam shuru');
+    const all = await mems(u);
+    // "studying arrays"-style memory = mentions arrays, says the student is on it now, and does not say it is done.
+    const staleArrays = all.filter(
+      (m) =>
+        /\barrays?\b/i.test(m.text) &&
+        /\b(studying|learning|practi[cs]ing|working on|doing|solving|currently)\b/i.test(m.text) &&
+        !/\b(complete[d]?|finished|done)\b/i.test(m.text)
+    );
+    const pass = staleArrays.length === 0 && all.some((m) => /\bstrings?\b/i.test(m.text));
+    return { pass, detail: all.map((m) => `[${m.category}] ${m.text}`) };
+  }),
+
   scenario('14 (extra). Two parallel add() calls, same user, same fact', async (log) => {
     const u = uid('s14');
     await Promise.all([

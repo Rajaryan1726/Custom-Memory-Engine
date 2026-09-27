@@ -25,6 +25,8 @@ function buildInput(facts, shortIds) {
  *   [{ action: 'ADD' | 'UPDATE' | 'DELETE' | 'NOOP', memoryId: <real id or null>, text }]
  * text is the final memory text for UPDATE, otherwise the fact text.
  * Invalid model output never throws; it falls back (see fallbackFor) and is logged.
+ * Exception: DELETE of an existing memory for an active fact becomes an UPDATE of that memory
+ * with the fact text (also logged as a fallback).
  * deps.chat is the chat function of the engine's LLM client (createLlmClient).
  */
 export async function decide(facts, candidates, { chat } = {}) {
@@ -78,7 +80,16 @@ export async function decide(facts, candidates, { chat } = {}) {
     if (fact.status === 'ended' && (action === 'ADD' || action === 'UPDATE')) {
       return fallback(`${action} is not allowed for an ended fact`);
     }
-    if (action === 'DELETE' && fact.status !== 'ended') return fallback('DELETE is only allowed for an ended fact');
+    if (action === 'DELETE' && fact.status !== 'ended') {
+      // The model wants the target gone because this active fact replaces it (e.g. "User has
+      // completed stacks" vs "User is studying stacks"). Falling back to ADD would keep the stale
+      // memory, so the target is updated to the fact's text instead; the old text stays in its history.
+      if (!memoryId) return fallback('DELETE is only allowed for an ended fact');
+      if (targeted.has(memoryId)) return fallback(`memory ${shortId} is already targeted by another action`);
+      targeted.add(memoryId);
+      warn(`fact ${i} "${fact.text}" (${fact.status}): DELETE is only allowed for an ended fact; using UPDATE of ${shortId} with the fact text`);
+      return { action: 'UPDATE', memoryId, text: fact.text };
+    }
 
     if (action === 'ADD') return { action, memoryId: null, text: fact.text };
     if (action === 'NOOP') return { action, memoryId, text: fact.text };
