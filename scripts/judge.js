@@ -37,7 +37,7 @@ Return ONLY JSON of this form:
 // Global limiter: at most MAX_CONCURRENT judge calls in flight across all cases.
 let active = 0;
 const waiting = [];
-async function limited(fn) {
+export async function limited(fn) {
   if (active >= MAX_CONCURRENT) {
     await new Promise((resolve) => waiting.push(resolve)); // slot is handed over on release
   } else {
@@ -65,7 +65,7 @@ function retryAfterMs(err, attempt) {
   return (Number.isFinite(ms) && ms > 0 ? ms : 2000 * 2 ** attempt) + 250;
 }
 
-async function withRateLimitRetry(fn) {
+export async function withRateLimitRetry(fn) {
   for (let attempt = 0; ; attempt++) {
     try {
       return await fn();
@@ -76,7 +76,7 @@ async function withRateLimitRetry(fn) {
   }
 }
 
-function transcript(messages) {
+export function transcript(messages) {
   return messages
     .map((m) => ({ role: m?.role, text: contentToText(m?.content).trim() }))
     .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.text)
