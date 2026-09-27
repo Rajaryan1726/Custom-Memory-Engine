@@ -1,0 +1,306 @@
+{
+  "about": "Held-out set v1, written 2026-09-27. Frozen: do NOT tune prompts on these cases. Topics, names and module numbers avoid those used in earlier tests and few-shots.",
+  "extraction": [
+    {
+      "id": "h_ex_01_quiz_score",
+      "messages": [
+        { "role": "user", "content": "bhai binary search ke quiz mein 3/10 aaye 😭 mid aur low high ka kuch samajh nahi aata" }
+      ],
+      "expectedFacts": [
+        { "claim": "The student struggles with binary search", "keywords": [["binary search"]] }
+      ],
+      "forbidden": []
+    },
+    {
+      "id": "h_ex_02_future_plan",
+      "messages": [
+        { "role": "user", "content": "abhi module 8 chal raha hai, next week se module 9 start karunga" }
+      ],
+      "expectedFacts": [
+        { "claim": "The student is currently on Module 8", "keywords": [["8"]] }
+      ],
+      "forbidden": [
+        "The student is currently on Module 9"
+      ]
+    },
+    {
+      "id": "h_ex_03_temporary_state",
+      "messages": [
+        { "role": "user", "content": "aaj bahut thak gaya hoon yaar, bas stack ka push pop ek baar jaldi se bata do" }
+      ],
+      "expectedFacts": [],
+      "forbidden": [
+        "The student is tired (as a lasting fact)",
+        "The student prefers quick or short explanations in general"
+      ]
+    },
+    {
+      "id": "h_ex_04_phone_constraint",
+      "messages": [
+        { "role": "user", "content": "main zyada tar phone pe padhta hoon, lambe code blocks screen pe toot jaate hain, chhote rakha karo please" }
+      ],
+      "expectedFacts": [
+        { "claim": "The student prefers short code blocks (studies on a phone)", "keywords": [["code"]] }
+      ],
+      "forbidden": []
+    },
+    {
+      "id": "h_ex_05_intuition_first",
+      "messages": [
+        { "role": "user", "content": "mujhe seedha code dekh ke kuch palle nahi padta. pehle idea samjhao ki kya ho raha hai, code baad mein" }
+      ],
+      "expectedFacts": [
+        { "claim": "The student prefers the intuition or idea before seeing code", "keywords": [["intuition", "idea", "concept"]] }
+      ],
+      "forbidden": []
+    },
+    {
+      "id": "h_ex_06_teacher_said",
+      "messages": [
+        { "role": "user", "content": "sir ne viva mein bola ki mera hashing ka concept weak hai, collision wala part toh bilkul nahi aata" }
+      ],
+      "expectedFacts": [
+        { "claim": "The student struggles with hashing collisions", "keywords": [["collision", "hashing"]] }
+      ],
+      "forbidden": []
+    },
+    {
+      "id": "h_ex_07_teammate",
+      "messages": [
+        { "role": "user", "content": "hamare group project mein Kabir backend kar raha hai aur usko SQL joins bahut ache aate hain. main frontend pe hoon" }
+      ],
+      "expectedFacts": [],
+      "allowed": [ "The student works on the frontend in a group project" ],
+      "forbidden": [
+        "The student is good at SQL joins",
+        "The student's name is Kabir",
+        "The student works on the backend"
+      ]
+    },
+    {
+      "id": "h_ex_08_self_correction_inline",
+      "messages": [
+        { "role": "user", "content": "linked list toh aa gaya... wait nahi, doubly linked list mein abhi bhi prev pointer confuse karta hai" }
+      ],
+      "expectedFacts": [
+        { "claim": "The student struggles with doubly linked lists (the prev pointer)", "keywords": [["doubly"]] }
+      ],
+      "forbidden": [
+        "The student struggles with linked lists in general, including singly linked lists"
+      ]
+    },
+    {
+      "id": "h_ex_09_first_year_background",
+      "messages": [
+        { "role": "user", "content": "hi main Tanvi, 1st year mein hoon aur coding pehli baar kar rahi hoon, school mein biology thi" }
+      ],
+      "expectedFacts": [
+        { "claim": "The student's name is Tanvi", "keywords": [["Tanvi"]] },
+        { "claim": "The student is in first year", "keywords": [["1st", "first"]] },
+        { "claim": "The student is new to coding", "keywords": [["first time", "new to", "beginner", "no prior", "never"]] }
+      ],
+      "allowed": [ "The student studied biology in school" ],
+      "forbidden": []
+    },
+    {
+      "id": "h_ex_10_long_content_question",
+      "messages": [
+        { "role": "user", "content": "greedy aur dynamic programming mein difference kya hai? aur kaise pata chalega ki kab greedy chalega aur kab nahi, koi example do na" }
+      ],
+      "expectedFacts": [],
+      "forbidden": [
+        "The student struggles with greedy algorithms",
+        "The student struggles with dynamic programming"
+      ]
+    },
+    {
+      "id": "h_ex_11_devanagari",
+      "messages": [
+        { "role": "user", "content": "मैं अभी मॉड्यूल 11 पर हूँ और बैकट्रैकिंग मुझे बिल्कुल समझ नहीं आती" }
+      ],
+      "expectedFacts": [
+        { "claim": "The student is on Module 11", "keywords": [["11"]] },
+        { "claim": "The student struggles with backtracking", "keywords": [["backtracking"]] }
+      ],
+      "forbidden": []
+    },
+    {
+      "id": "h_ex_12_hobby_with_context",
+      "messages": [
+        { "role": "user", "content": "free time mein guitar bajata hoon, isliye shayad patterns wali cheezein jaldi pakad leta hoon" }
+      ],
+      "expectedFacts": [
+        { "claim": "The student plays guitar", "keywords": [["guitar"]] }
+      ],
+      "forbidden": []
+    },
+    {
+      "id": "h_ex_13_assistant_context",
+      "messages": [
+        { "role": "assistant", "content": "Tries samajhne se pehle ek baat batao, hashmap comfortable hai tumhe?" },
+        { "role": "user", "content": "haan woh toh theek hai, tries hi nahi aate" }
+      ],
+      "expectedFacts": [
+        { "claim": "The student struggles with tries", "keywords": [["trie"]] }
+      ],
+      "forbidden": [
+        "The student struggles with hashmaps"
+      ]
+    },
+    {
+      "id": "h_ex_14_exam_goal",
+      "messages": [
+        { "role": "user", "content": "15 oct ko mid-sem hai, usse pehle segment tree aur bit manipulation dono khatam karne hain" }
+      ],
+      "expectedFacts": [
+        { "claim": "The student wants to finish segment trees and bit manipulation before the mid-sem exam", "keywords": [["segment tree", "bit manipulation", "mid-sem", "mid sem"]] }
+      ],
+      "forbidden": [
+        "The student has already completed segment trees"
+      ]
+    },
+    {
+      "id": "h_ex_15_small_talk_mixed",
+      "messages": [
+        { "role": "user", "content": "gm bhai" },
+        { "role": "assistant", "content": "Good morning! Aaj kya padhna hai?" },
+        { "role": "user", "content": "kuch nahi bas aise hi, baad mein aata hoon 👍" }
+      ],
+      "expectedFacts": [],
+      "forbidden": []
+    },
+    {
+      "id": "h_ex_16_one_off_code_only",
+      "messages": [
+        { "role": "user", "content": "is baar explanation mat do, sirf queue ka code de do jaldi" }
+      ],
+      "expectedFacts": [],
+      "forbidden": [
+        "The student prefers code without explanations in general"
+      ]
+    },
+    {
+      "id": "h_ex_17_typos_no_punct",
+      "messages": [
+        { "role": "user", "content": "main modul 12 pe hu abhi or graph ka dijkstra samj nhi aata priority queue kyu lagta h usme" }
+      ],
+      "expectedFacts": [
+        { "claim": "The student is on Module 12", "keywords": [["12"]] },
+        { "claim": "The student struggles with Dijkstra's algorithm", "keywords": [["dijkstra"]] }
+      ],
+      "forbidden": []
+    },
+    {
+      "id": "h_ex_18_false_premise_question",
+      "messages": [
+        { "role": "user", "content": "heap sort stable hota hai na? mere notes mein yahi likha hai" }
+      ],
+      "expectedFacts": [],
+      "forbidden": [
+        "The student struggles with heap sort"
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "h_sc_01_module_correction",
+      "sessions": [
+        [ { "role": "user", "content": "module 8 pe hoon abhi" } ],
+        [ { "role": "user", "content": "ab module 9 pe aa gaya" } ],
+        [ { "role": "user", "content": "sorry galat bola tha, abhi bhi module 8 hi chal raha hai, 9 shuru nahi kiya" } ]
+      ],
+      "expectedState": "The current module is Module 8. No memory says the student is currently on Module 9."
+    },
+    {
+      "id": "h_sc_02_partial_resolution",
+      "sessions": [
+        [ { "role": "user", "content": "hashing samajh nahi aata" } ],
+        [ { "role": "user", "content": "hashing ka basic ab clear hai, bas collision handling abhi bhi nahi aati" } ]
+      ],
+      "expectedState": "The student struggles with collision handling in hashing. No memory says the student struggles with hashing basics or with hashing in general."
+    },
+    {
+      "id": "h_sc_03_language_switch",
+      "sessions": [
+        [ { "role": "user", "content": "Hinglish mein samjhaya karo, English mein dimaag nahi chalta" } ],
+        [ { "role": "user", "content": "ab English theek lagne lagi hai, aage se English mein hi samjhao" } ]
+      ],
+      "expectedState": "The student prefers explanations in English. No memory says the student currently prefers Hinglish."
+    },
+    {
+      "id": "h_sc_04_goal_change",
+      "sessions": [
+        [ { "role": "user", "content": "mujhe web development mein job chahiye" } ],
+        [ { "role": "user", "content": "web dev chhod diya, ab ML engineer banna hai" } ]
+      ],
+      "expectedState": "The student's goal is to become an ML engineer. No memory says the student currently wants a web development job."
+    },
+    {
+      "id": "h_sc_05_plan_then_done",
+      "sessions": [
+        [ { "role": "user", "content": "main module 10 pe hoon, kal se module 11 start karunga" } ],
+        [ { "role": "user", "content": "module 11 shuru kar diya aaj" } ]
+      ],
+      "expectedState": "The current module is Module 11. No memory says the student is currently on Module 10."
+    },
+    {
+      "id": "h_sc_06_topic_moves_on",
+      "sessions": [
+        [ { "role": "user", "content": "abhi stacks padh raha hoon" } ],
+        [ { "role": "user", "content": "stacks ho gaye, ab queues shuru kiye" } ]
+      ],
+      "expectedState": "The student is currently studying queues. No memory says the student is currently studying stacks."
+    },
+    {
+      "id": "h_sc_07_same_fact_two_scripts",
+      "sessions": [
+        [ { "role": "user", "content": "binary search mein dikkat hai" } ],
+        [ { "role": "user", "content": "बाइनरी सर्च अभी भी नहीं आता" } ]
+      ],
+      "expectedState": "Exactly one memory says the student struggles with binary search. There is no duplicate of this fact."
+    },
+    {
+      "id": "h_sc_08_friend_then_self",
+      "sessions": [
+        [ { "role": "user", "content": "mera dost Kabir module 12 pe pahunch gaya" } ],
+        [ { "role": "user", "content": "main toh abhi module 9 pe hi hoon" } ]
+      ],
+      "expectedState": "The student is on Module 9. No memory says the student is on Module 12."
+    },
+    {
+      "id": "h_sc_09_name_spelling",
+      "sessions": [
+        [ { "role": "user", "content": "main Ishan hoon" } ],
+        [ { "role": "user", "content": "ek baat, mere naam ki spelling Ishaan hai, double a" } ]
+      ],
+      "expectedState": "The student's name is Ishaan. No memory gives the name as Ishan (single a)."
+    },
+    {
+      "id": "h_sc_10_one_off_then_standing",
+      "sessions": [
+        [ { "role": "user", "content": "is baar sirf code do, explanation nahi chahiye" } ],
+        [ { "role": "user", "content": "code blocks chhote rakha karo, main phone pe padhta hoon" } ]
+      ],
+      "expectedState": "The student prefers short code blocks. No memory says the student prefers code without explanations."
+    },
+    {
+      "id": "h_sc_11_small_talk_around_fact",
+      "sessions": [
+        [ { "role": "user", "content": "gm" } ],
+        [ { "role": "user", "content": "tries mein bahut dikkat ho rahi hai" } ],
+        [ { "role": "user", "content": "thanks bhai 🙏" } ],
+        [ { "role": "user", "content": "ok" } ]
+      ],
+      "expectedState": "Exactly one memory: the student struggles with tries. Nothing else is stored."
+    },
+    {
+      "id": "h_sc_12_relapse",
+      "sessions": [
+        [ { "role": "user", "content": "greedy samajh nahi aata" } ],
+        [ { "role": "user", "content": "greedy ab clear ho gaya" } ],
+        [ { "role": "user", "content": "yaar greedy phir se confuse kar raha hai, activity selection wala question" } ]
+      ],
+      "expectedState": "Exactly one memory says the student struggles with greedy algorithms. No memory says greedy is clear."
+    }
+  ]
+}

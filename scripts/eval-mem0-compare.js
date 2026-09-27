@@ -9,6 +9,8 @@
 //   COMPARE_PROVIDERS=engine,mem0   (also: mem0-latest = Mem0 read with latestOnly: true)
 //   COMPARE_CASE_LIMIT=N      only the first N extraction cases (smoke tests)
 //   COMPARE_SCENARIOS=1,13    only these update scenarios (smoke tests)
+//   COMPARE_SET=tuned|heldout tuned (default) = the 7c-1 data; heldout = tests/heldout/heldout-cases.json
+//                             (read-only here: extraction cases + multi-session scenarios)
 //
 // Every test userId starts with "m0eval_". At the end every such user is deleted from both
 // providers and the script proves none is left (Mem0 entity list, engine getAll + collection).
@@ -32,13 +34,44 @@ const PROVIDERS = (process.env.COMPARE_PROVIDERS ?? 'engine,mem0').split(',').ma
 const CASE_LIMIT = process.env.COMPARE_CASE_LIMIT ? Number.parseInt(process.env.COMPARE_CASE_LIMIT, 10) : Infinity;
 const ONLY_SCENARIOS = process.env.COMPARE_SCENARIOS ? process.env.COMPARE_SCENARIOS.split(',').map((x) => x.trim()) : null;
 
-const loadCases = async (file, suite) =>
-  JSON.parse(await readFile(new URL(`../tests/${file}`, import.meta.url), 'utf8')).map((c) => ({ ...c, suite }));
-const CASES = [
-  ...(await loadCases('extraction-cases.json', 'original')),
-  ...(await loadCases('extraction-cases-extended.json', 'extended')),
-].slice(0, CASE_LIMIT);
-const SCENARIOS = UPDATE_SCENARIOS.filter((s) => !ONLY_SCENARIOS || ONLY_SCENARIOS.includes(s.id));
+const SET = process.env.COMPARE_SET ?? 'tuned';
+if (!['tuned', 'heldout'].includes(SET)) throw new Error(`COMPARE_SET must be "tuned" or "heldout", got "${SET}"`);
+const readJson = async (file) => JSON.parse(await readFile(new URL(`../tests/${file}`, import.meta.url), 'utf8'));
+const loadCases = async (file, suite) => (await readJson(file)).map((c) => ({ ...c, suite }));
+
+/**
+ * Held-out file -> the harness's own shapes. Extraction case: one add of `messages`;
+ * expectedFacts[].keywords has the same shape as mustInclude (each inner array = any-of);
+ * forbidden / allowed are plain-English claims for the assertion judge. Scenario: each
+ * `sessions` entry is one add() for the same user, in order, then getAll vs expectedState.
+ */
+async function loadHeldout() {
+  const data = await readJson('heldout/heldout-cases.json');
+  const cases = data.extraction.map((c) => ({
+    name: c.id,
+    suite: 'heldout',
+    messages: c.messages,
+    expected: c.expectedFacts.map((f) => ({ claim: f.claim, mustInclude: f.keywords })),
+    claims: { forbidden: c.forbidden ?? [], allowed: c.allowed ?? [] },
+  }));
+  const scenarios = data.scenarios.map((sc) => ({
+    id: sc.id,
+    name: sc.id,
+    steps: sc.sessions.map((messages) => ({ say: messages })),
+    checks: [{ as: 'a', expected: sc.expectedState }],
+  }));
+  return { cases, scenarios };
+}
+
+const DATA =
+  SET === 'heldout'
+    ? await loadHeldout()
+    : {
+        cases: [...(await loadCases('extraction-cases.json', 'original')), ...(await loadCases('extraction-cases-extended.json', 'extended'))],
+        scenarios: UPDATE_SCENARIOS,
+      };
+const CASES = DATA.cases.slice(0, CASE_LIMIT);
+const SCENARIOS = DATA.scenarios.filter((s) => !ONLY_SCENARIOS || ONLY_SCENARIOS.includes(s.id));
 
 // ---- helpers --------------------------------------------------------------------
 async function pool(items, n, fn) {
@@ -164,7 +197,7 @@ async function judgeRun(collected) {
       const expectedActive = c.expected.filter((e) => (e.status ?? 'active') === 'active');
       const found = expectedActive.map((e) => ({ spec: e.mustInclude, found: r.memories.some((m) => keywordMatch(m, e)) }));
 
-      const claims = CASE_CLAIMS[c.name] ?? {};
+      const claims = c.claims ?? CASE_CLAIMS[c.name] ?? {};
       const cache = new Map();
       const assert = (m, claim) => {
         const key = `${claim}\u0000${m}`;
@@ -182,9 +215,14 @@ async function judgeRun(collected) {
             return { claim, hits };
           })
         );
+      // Memories that state an "allowed" fact neither help nor hurt precision (held-out set only).
+      const allowed = await scoreClaims(claims.allowed);
+      const allowedTexts = new Set(allowed.flatMap((a) => a.hits.map((h) => h.text)));
+      for (const m of judged) if (allowedTexts.has(m.text)) m.allowed = true;
       return {
         ...r,
         judged,
+        allowed,
         recall: found,
         ended: await scoreClaims(claims.ended),
         forbidden: await scoreClaims(claims.forbidden),
@@ -200,11 +238,13 @@ function summarize(j) {
   const extra = j.scenarios.filter((s) => s.extra);
   const bySuite = (suite) => {
     const cs = suite ? j.cases.filter((c) => c.suite === suite) : j.cases;
-    const mems = cs.flatMap((c) => c.judged);
+    const all = cs.flatMap((c) => c.judged);
+    const mems = all.filter((m) => !m.allowed); // precision ignores memories that state an allowed fact
     const exp = cs.flatMap((c) => c.recall);
     return {
       cases: cs.length,
       memories: mems.length,
+      allowedExcluded: all.length - mems.length,
       correct: mems.filter((m) => m.verdict === 'correct').length,
       unjudged: mems.filter((m) => m.verdict === 'unjudged').length,
       precision: ratio(mems.filter((m) => m.verdict === 'correct').length, mems.length),
@@ -215,7 +255,7 @@ function summarize(j) {
       endedClaims: cs.flatMap((c) => c.ended).length,
       forbiddenAsserted: cs.flatMap((c) => c.forbidden).reduce((n, x) => n + x.hits.length, 0),
       forbiddenClaims: cs.flatMap((c) => c.forbidden).length,
-      avgMemories: ratio(mems.length, cs.length),
+      avgMemories: ratio(all.length, cs.length),
       errors: cs.filter((c) => c.error).length,
     };
   };
@@ -312,7 +352,7 @@ function printDetails(run, name, j) {
   }
   console.log(`\n--- run ${run} ${name}: extraction problems ---`);
   for (const c of j.cases) {
-    const wrong = c.judged.filter((m) => m.verdict !== 'correct');
+    const wrong = c.judged.filter((m) => m.verdict !== 'correct' && !m.allowed);
     const missed = c.recall.filter((x) => !x.found);
     const bad = [...c.ended, ...c.forbidden].filter((x) => x.hits.length);
     if (!wrong.length && !missed.length && !bad.length && !c.error) continue;
@@ -325,7 +365,7 @@ function printDetails(run, name, j) {
 
 // ---- main ----------------------------------------------------------------------------------
 async function main() {
-  console.log(`eval-mem0-compare: runs=${RUNS}, providers=${PROVIDERS.join(',')}, scenarios=${SCENARIOS.length}, cases=${CASES.length}, judge=${NEUTRAL_JUDGE_MODEL}, tag=${TAG}`);
+  console.log(`eval-mem0-compare: set=${SET}, runs=${RUNS}, providers=${PROVIDERS.join(',')}, scenarios=${SCENARIOS.length}, cases=${CASES.length}, judge=${NEUTRAL_JUDGE_MODEL}, tag=${TAG}`);
   const qdrant = createQdrantClient();
   if ((await qdrant.collectionExists(ENGINE_COLLECTION)).exists) await qdrant.deleteCollection(ENGINE_COLLECTION);
 
@@ -365,7 +405,8 @@ async function main() {
   const mem0Stats = Object.fromEntries(providers.filter((p) => p.stats).map((p) => [p.name, p.stats]));
   if (mem0Stats) console.log(`Mem0 wait stats: ${JSON.stringify(mem0Stats)}`);
 
-  const file = await saveResult('mem0-compare', {
+  const file = await saveResult(SET === 'heldout' ? 'heldout-compare' : 'mem0-compare', {
+    set: SET,
     runAt: new Date().toISOString(),
     tag: TAG,
     judgeModel: NEUTRAL_JUDGE_MODEL,
