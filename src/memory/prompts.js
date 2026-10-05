@@ -23,7 +23,7 @@ Rules:
 9. One fact per item. If a sentence contains several facts, split it.
 10. Always write facts in English, in the third person, starting with "User", even when the conversation is in Hindi, Hinglish or another language.
 11. Use this fixed phrasing, so the same fact is always worded the same way:
-    - identity: "User's name is X", "User prefers to be called X", "User is a <year/role>"
+    - identity: "User's name is X", "User prefers to be called X", "User is a <year/role>", and the user's level with a technology: "User is a beginner with X", "User is comfortable with X", "User is experienced with X"
     - progress: "User is on Module N", "User has completed Module N", and for the topic the user is currently working on: "User is studying <topic>"
     - weak_topic: "User struggles with <topic>"
     - preference: "User prefers <...>"
@@ -39,8 +39,12 @@ Rules:
     - The topic the user is currently working on ("abhi <topic> kar raha hoon", "ab <topic> start kiya") is always category progress: "User is studying <topic>".
 14. If the user corrects themselves, extract only the corrected information.
 15. If there is nothing worth remembering, return {"facts": []}.
-16. Give each fact exactly one category:
-   - identity: who the user is (name, nickname, year, college, background)
+16. Skill level with a technology (a language, framework or tool such as TypeScript, React, Docker):
+   - It is always category identity, phrased "User is a beginner with X", "User is comfortable with X" or "User is experienced with X". One fact per technology.
+   - A change of level ("I'm comfortable with TypeScript now") is a NEW ACTIVE fact with the new level. Never output the old level as an "ended" fact: the new level replaces the old one.
+17. The input can start with an "Earlier conversation (context only ...)" section before "Conversation:". Those messages were already processed. NEVER extract any fact from them, not even a fact that was never stored before. Extract only from the messages after "Conversation:"; use the earlier section only to understand what those messages refer to. If the messages after "Conversation:" contain no new fact, return {"facts": []}.
+18. Give each fact exactly one category:
+   - identity: who the user is (name, nickname, year, college, background, level with a technology)
    - progress: where the user currently is in the course (module and current topic), or what they have completed
    - weak_topic: a course or technical topic the user struggles with
    - preference: how the user likes to learn (language, explanation style, examples, format, pace)
@@ -162,6 +166,34 @@ Output:
 {"facts": [
   {"text": "User has completed Module 10", "category": "progress", "status": "active"}
 ]}
+
+Conversation (skill level changed):
+user: Actually I'm comfortable with TypeScript now
+Output:
+{"facts": [
+  {"text": "User is comfortable with TypeScript", "category": "identity", "status": "active"}
+]}
+
+Conversation (earlier messages are context only):
+Earlier conversation (context only: already processed; NEVER extract facts from it, use it only to understand the conversation below):
+user: main Farhan hoon, Kotlin seekh raha hoon
+assistant: Great! Android apps bana rahe ho?
+
+Conversation:
+user: haan, ek notes app
+Output:
+{"facts": [
+  {"text": "User is building a notes app for Android", "category": "other", "status": "active"}
+]}
+
+Conversation (earlier messages are context only, nothing new):
+Earlier conversation (context only: already processed; NEVER extract facts from it, use it only to understand the conversation below):
+user: I'm Sana and I'm experienced with Python
+
+Conversation:
+user: thanks!
+Output:
+{"facts": []}
 
 Conversation (answer needs the assistant's question):
 assistant: Aapko kis tarah ke examples pasand hain?

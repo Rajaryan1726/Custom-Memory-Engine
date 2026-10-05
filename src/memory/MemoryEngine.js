@@ -1,10 +1,10 @@
 import { validateConfig } from '../config/index.js';
-import { createLlmClient } from '../llm/client.js';
-import { createEmbedder } from '../llm/embed.js';
+import { createLlmClient, wrapInjectedChat } from '../llm/client.js';
+import { createEmbedder, createInjectedEmbedder } from '../llm/embed.js';
 import { createVectorStore } from '../stores/vectorStore.js';
 import { formatContext, isSmallTalk } from './context.js';
 import { decide } from './decider.js';
-import { extractFacts } from './extractor.js';
+import { extractFacts, isContextMessage } from './extractor.js';
 import { contentToText } from './messages.js';
 
 function requireUserId(userId, method) {
@@ -46,13 +46,17 @@ const RELEVANT_LIMIT = 3;
 
 const EXTRACTION_MODES = ['llm', 'naive'];
 
+// Default logger: prints the message only. Messages never contain raw fact text; that is only
+// in `details`, which an injected logger may choose to record.
+const DEFAULT_LOGGER = Object.freeze({ warn: (message) => console.warn(message) });
+
 /**
  * Naive selection: every non-blank "user" message becomes one memory.
  * Returns [{ text, category, status }].
  */
 function selectTextsNaive(messages) {
   return messages
-    .filter((m) => m?.role === 'user')
+    .filter((m) => m?.role === 'user' && !isContextMessage(m))
     .map((m) => contentToText(m.content).trim())
     .filter(Boolean)
     .map((text) => ({ text, category: null, status: 'active' }));
@@ -83,15 +87,27 @@ const CANDIDATES_PER_FACT = 5;
 
 const sameText = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
+// A new version of a fact can be extracted under a different category than the old one
+// (old [identity] "User is a beginner with TypeScript", new [other] "User is comfortable with
+// TypeScript"). Close matches from any category are therefore also shown to the decider.
+// The score floor keeps unrelated memories from other categories out of the decider prompt.
+const CROSS_CATEGORY_MIN_SCORE = 0.5;
+
 /**
- * Finds existing memories related to each fact: same category, top CANDIDATES_PER_FACT.
- * Returns one candidate list per fact.
+ * Finds existing memories related to each fact: the top CANDIDATES_PER_FACT of the same
+ * category, plus the top CANDIDATES_PER_FACT of any category scoring >= CROSS_CATEGORY_MIN_SCORE.
+ * Returns one deduplicated candidate list per fact (same-category matches first).
  */
 async function findCandidates(store, userId, facts) {
   return Promise.all(
-    facts.map((f) =>
-      store.search(userId, f.vector, { limit: CANDIDATES_PER_FACT, category: f.category ?? undefined })
-    )
+    facts.map(async (f) => {
+      const [sameCategory, anyCategory] = await Promise.all([
+        store.search(userId, f.vector, { limit: CANDIDATES_PER_FACT, category: f.category ?? undefined }),
+        store.search(userId, f.vector, { limit: CANDIDATES_PER_FACT, scoreThreshold: CROSS_CATEGORY_MIN_SCORE }),
+      ]);
+      const seen = new Set(sameCategory.map((m) => m.id));
+      return [...sameCategory, ...anyCategory.filter((m) => !seen.has(m.id))];
+    })
   );
 }
 
@@ -100,7 +116,7 @@ async function findCandidates(store, userId, facts) {
  * Exact-text matches are NOOP without an LLM call; the decider is skipped
  * entirely when no remaining fact has a related memory.
  */
-async function planActions(facts, candidateLists, chat) {
+async function planActions(facts, candidateLists, chat, logger) {
   const plan = new Array(facts.length);
   const pending = [];
 
@@ -127,7 +143,7 @@ async function planActions(facts, candidateLists, chat) {
   const decisions = await decide(
     pending.map((i) => facts[i]),
     [...memoriesById.values()].map(({ id, text, category }) => ({ id, text, category })),
-    { chat }
+    { chat, logger }
   );
   decisions.forEach((d, k) => {
     const previous = d.memoryId ? memoriesById.get(d.memoryId) : undefined;
@@ -146,8 +162,15 @@ async function planActions(facts, candidateLists, chat) {
  * config: { openai: { apiKey, chatModel, embeddingModel, embeddingDim },
  *           qdrant: { url, apiKey? }, collection, scoreThreshold? }
  * collection: optional override of config.collection
- * llm: optional client from createLlmClient() (advanced: lets tests instrument calls);
- *      must use the same apiKey/chatModel as config
+ * llm: optional injected clients, either
+ *      - { chat, embed }: chat({ system, user, json, temperature, model }) -> text, or the parsed
+ *        object (or a JSON string) when json is true; embed(texts) -> number[][] (one vector per
+ *        text, embeddingDim long). config.openai.apiKey / chatModel / embeddingModel are then optional.
+ *      - a client from createLlmClient() ({ openai, chat }), e.g. to instrument calls in tests;
+ *        embeddings then use llm.openai with config.openai.embeddingModel.
+ *      Any mix works: { chat, openai } uses the injected chat and the SDK for embeddings.
+ * logger: optional { warn(message, details) }. Messages never contain raw fact text; details
+ *      (e.g. { factText }) do. The default logger prints only the message with console.warn.
  */
 export function createMemoryEngine({
   config,
@@ -155,26 +178,44 @@ export function createMemoryEngine({
   extraction = 'llm',
   dedupe = true,
   llm,
+  logger = DEFAULT_LOGGER,
 } = {}) {
-  const cfg = validateConfig(config, { collection });
+  if (llm !== undefined) {
+    if (!llm || typeof llm.chat !== 'function') {
+      throw new Error('createMemoryEngine: llm.chat must be a function ({ chat, embed } or a client from createLlmClient()).');
+    }
+    if (typeof llm.embed !== 'function' && !llm.openai) {
+      throw new Error('createMemoryEngine: llm needs embed(texts) -> number[][] or an OpenAI SDK client as llm.openai.');
+    }
+  }
+  if (!logger || typeof logger.warn !== 'function') {
+    throw new Error('createMemoryEngine: logger must have a warn(message, details) function.');
+  }
+  const injectedEmbed = typeof llm?.embed === 'function';
+  const cfg = validateConfig(config, {
+    collection,
+    injected: { chat: Boolean(llm), embed: injectedEmbed, openai: Boolean(llm?.openai) },
+  });
   if (!EXTRACTION_MODES.includes(extraction)) {
     throw new Error(
       `createMemoryEngine: extraction must be one of ${EXTRACTION_MODES.join(', ')}, got "${extraction}".`
     );
   }
-  if (llm !== undefined && (typeof llm?.chat !== 'function' || !llm?.openai)) {
-    throw new Error('createMemoryEngine: llm must be a client from createLlmClient() ({ openai, chat }).');
-  }
 
-  const client = llm ?? createLlmClient({ apiKey: cfg.openai.apiKey, chatModel: cfg.openai.chatModel });
-  const { embed, embedMany } = createEmbedder({
-    openai: client.openai,
-    embeddingModel: cfg.openai.embeddingModel,
-    embeddingDim: cfg.openai.embeddingDim,
-  });
+  const sdkClient = llm ? null : createLlmClient({ apiKey: cfg.openai.apiKey, chatModel: cfg.openai.chatModel });
+  const chat = llm ? wrapInjectedChat(llm.chat) : sdkClient.chat;
+  const { embed, embedMany } = injectedEmbed
+    ? createInjectedEmbedder({ embed: llm.embed, embeddingDim: cfg.openai.embeddingDim })
+    : createEmbedder({
+        openai: llm?.openai ?? sdkClient.openai,
+        embeddingModel: cfg.openai.embeddingModel,
+        embeddingDim: cfg.openai.embeddingDim,
+      });
   const store = createVectorStore({ qdrant: cfg.qdrant, embeddingDim: cfg.openai.embeddingDim, collection: cfg.collection });
   const selectTexts =
-    extraction === 'llm' ? (messages) => extractFacts(messages, { chat: client.chat }) : selectTextsNaive;
+    extraction === 'llm'
+      ? (messages, contextMessages) => extractFacts(messages, { chat, contextMessages })
+      : (messages) => selectTextsNaive(messages);
 
   let readyPromise = null;
   function ready() {
@@ -229,7 +270,7 @@ export function createMemoryEngine({
     await ready();
     const embedded = await embedCandidates(facts, embedMany);
     const candidateLists = await findCandidates(store, userId, embedded);
-    const plan = await planActions(embedded, candidateLists, client.chat);
+    const plan = await planActions(embedded, candidateLists, chat, logger);
     const results = new Array(facts.length);
 
     // Apply in order: DELETE, then UPDATE, then ADD.
@@ -273,14 +314,22 @@ export function createMemoryEngine({
     return { results };
   }
 
-  async function add(messages, { userId, metadata = {} } = {}) {
+  /**
+   * messages: [{ role, content, context? }]. Facts come only from messages that are not
+   * context-only. contextMessages (optional): earlier messages shown to the extractor as
+   * context but never extracted from; same as passing them with `context: true`.
+   */
+  async function add(messages, { userId, metadata = {}, contextMessages = [] } = {}) {
     requireUserId(userId, 'add');
     if (!Array.isArray(messages)) {
       throw new Error('MemoryEngine.add: messages must be an array of { role, content }.');
     }
+    if (!Array.isArray(contextMessages)) {
+      throw new Error('MemoryEngine.add: contextMessages must be an array of { role, content }.');
+    }
 
     // Extraction does not touch storage, so it runs outside the per-user queue.
-    const facts = await selectTexts(messages);
+    const facts = await selectTexts(messages, contextMessages);
     if (facts.length === 0) return { results: [] };
 
     return runExclusive(userId, () =>

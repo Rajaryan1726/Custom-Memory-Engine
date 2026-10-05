@@ -5,7 +5,7 @@ A long-term memory layer for AI tutoring apps: an alternative to [Mem0](https://
 It reads each chat turn, extracts durable facts about the student, decides whether each fact is new, a duplicate, or a replacement for an old fact, and stores them per user in Qdrant. Before the tutor answers, it returns a short, prompt-ready student profile. It understands Hinglish, Roman Hindi, English and Devanagari.
 
 - **Stack:** Node.js 20+ (ES modules, plain JavaScript), Qdrant (Docker), OpenAI `gpt-4o-mini` + `text-embedding-3-small`.
-- **Version:** 0.1.1. Used as a library by a RAG course platform, behind a provider flag with hosted Mem0 as the fallback.
+- **Version:** 0.2.0. Used as a library by a RAG course platform, behind a provider flag with hosted Mem0 as the fallback.
 
 ---
 
@@ -127,6 +127,8 @@ Categories: `identity`, `progress`, `weak_topic`, `preference`, `goal`, `other`.
 | Held-out | Unseen test set to measure the home advantage | engine −8 points, still far ahead |
 | 7c-2 (v0.1.1) | A decider `DELETE` for an *active* replacing fact ("User has completed stacks") now becomes an `UPDATE` of the stale memory instead of an `ADD` that kept it | "stacks done, now queues": stale memory gone 3/3; held-out scenarios 11/12 → 12/12* |
 
+| 0.2.0 | From the AutoWiki integration eval: cross-category candidates for the decider; skill level as `identity` ("User is comfortable with X") so a level change UPDATEs; context-only messages (`contextMessages` / `context: true`); injectable `llm: { chat, embed }` and `logger`, no fact text in default logs | TypeScript level update 1/5 → **5/5** same id; context re-extraction 0/5 → **5/5** clean ([report](docs/evals/2026-10-05-autowiki-integration-fixes.md)) |
+
 \* Held-out v1 was used to find this fix, so it is no longer a true held-out set. The next held-out set will be real student data.
 
 ---
@@ -200,7 +202,7 @@ await memory.add(
 
 | Method | What it does |
 |---|---|
-| `add(messages, { userId, metadata })` | Extract, dedupe/update, store. Per-user writes are serialised. |
+| `add(messages, { userId, metadata, contextMessages })` | Extract, dedupe/update, store. Per-user writes are serialised. Messages in `contextMessages`, or with `context: true`, are shown to the extractor but never extracted from. |
 | `getContext(query, { userId })` | `{ profile, relevant, smallTalk }` for the tutor prompt |
 | `search(query, { userId, limit, category, scoreThreshold, includeArchived })` | Vector search |
 | `getAll({ userId, category, includeArchived })` | All active memories (archived ones on request) |
@@ -213,6 +215,25 @@ await memory.add(
 - **Exports:** `createMemoryEngine`, `formatContext`, `isSmallTalk`, `CATEGORIES`, `loadConfigFromEnv` (this repo's variable names; reads only when called).
 - **Config is checked up front:** `createMemoryEngine` validates it and throws one error naming every missing field.
 - **Engines don't share state:** each instance has its own clients and queues.
+
+**Injecting your own LLM clients and logger** (0.2.0):
+
+```js
+const memory = createMemoryEngine({
+  config: { openai: { embeddingDim: 1536 }, qdrant: { url }, collection: 'wiki_memories' }, // no apiKey / models needed
+  llm: {
+    chat: async ({ system, user, json, temperature }) => myChat(system, user, { json, temperature }), // text, or object / JSON string when json
+    embed: async (texts) => myEmbed(texts), // number[][], one vector per text, embeddingDim long
+  },
+  logger: { warn: (message, details) => myLog.warn(message, details) }, // details may contain fact text
+});
+
+// Earlier turns as context only: they help the extractor but produce no facts.
+await memory.add([{ role: 'user', content: 'yes, the second one' }], { userId, contextMessages: previousTurns });
+```
+
+- `llm` can also be a client from `createLlmClient()` (`{ openai, chat }`), as before.
+- **Fact text stays out of log messages.** The default logger prints decider-fallback messages with `console.warn`, and those messages contain no fact text. The text is passed only in `details`, so only an injected logger ever receives it.
 
 **Integration advice** (as used in the RAG platform):
 - Read memory once per turn.
@@ -262,6 +283,7 @@ Folder rules are in [CLAUDE.md](CLAUDE.md):
 | `eval:update:9a` (`EVAL_RUNS=5`) | 9a 5/5, 9b 5/5 |
 | `eval:context` | context recall 100% (14/14), small-talk gate 1/19, `getContext` p50 ~460 ms |
 | `eval:robustness` | 1,418 result ids, **0 cross-user leaks**; 0/90, 0/540, 0/10 breaches |
+| `eval:integration` (`INTEGRATION_RUNS`, default 5) | skill-level update 5/5, cross-category 5/5, context-only messages 5/5 + 5/5 |
 | `eval:mem0-compare` | engine vs hosted Mem0; `COMPARE_SET=heldout` for the unseen set |
 
 **Other scripts:**

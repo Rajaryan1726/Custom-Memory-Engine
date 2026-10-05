@@ -12,9 +12,15 @@ const isNonEmptyString = (v) => typeof v === 'string' && v.trim() !== '';
  *   { openai: { apiKey, chatModel, embeddingModel, embeddingDim, judgeModel? },
  *     qdrant: { url, apiKey? }, collection, scoreThreshold? }
  * `collection` may be given separately (it overrides config.collection).
+ * `injected` says which clients the caller passed in, so the matching fields are optional:
+ *   chat: a chat function was injected -> chatModel not required
+ *   embed: an embed function was injected -> embeddingModel not required
+ *   openai: an OpenAI SDK client was injected -> apiKey not required
+ *   (apiKey is also not required when both chat and embed are injected)
+ * embeddingDim is always required (it sizes the Qdrant collection).
  * Throws one error naming every missing or invalid field. Returns a new frozen object.
  */
-export function validateConfig(config, { collection, label = 'createMemoryEngine' } = {}) {
+export function validateConfig(config, { collection, label = 'createMemoryEngine', injected = {} } = {}) {
   if (!config || typeof config !== 'object') {
     throw new Error(`${label}: "config" is required: { openai: { apiKey, chatModel, embeddingModel, embeddingDim }, qdrant: { url }, collection }.`);
   }
@@ -22,8 +28,16 @@ export function validateConfig(config, { collection, label = 'createMemoryEngine
   const qdrant = config.qdrant ?? {};
   const problems = [];
 
-  for (const field of ['apiKey', 'chatModel', 'embeddingModel']) {
-    if (!isNonEmptyString(openai[field])) problems.push(`config.openai.${field} is required (non-empty string)`);
+  const required = {
+    apiKey: !injected.openai && !(injected.chat && injected.embed),
+    chatModel: !injected.chat,
+    embeddingModel: !injected.embed,
+  };
+  for (const [field, isRequired] of Object.entries(required)) {
+    const value = openai[field];
+    if (isRequired ? !isNonEmptyString(value) : value !== undefined && value !== null && typeof value !== 'string') {
+      problems.push(`config.openai.${field} is ${isRequired ? 'required (non-empty string)' : 'optional but must be a string when set'}`);
+    }
   }
   if (!Number.isInteger(openai.embeddingDim) || openai.embeddingDim <= 0) {
     problems.push(`config.openai.embeddingDim is required (positive integer, got ${JSON.stringify(openai.embeddingDim)})`);
@@ -46,9 +60,10 @@ export function validateConfig(config, { collection, label = 'createMemoryEngine
   const qdrantApiKey = isNonEmptyString(qdrant.apiKey) ? qdrant.apiKey.trim() : undefined;
   return Object.freeze({
     openai: Object.freeze({
-      apiKey: openai.apiKey.trim(),
-      chatModel: openai.chatModel.trim(),
-      embeddingModel: openai.embeddingModel.trim(),
+      // Only present when set (they are optional when clients are injected).
+      ...(isNonEmptyString(openai.apiKey) ? { apiKey: openai.apiKey.trim() } : {}),
+      ...(isNonEmptyString(openai.chatModel) ? { chatModel: openai.chatModel.trim() } : {}),
+      ...(isNonEmptyString(openai.embeddingModel) ? { embeddingModel: openai.embeddingModel.trim() } : {}),
       embeddingDim: openai.embeddingDim,
       ...(isNonEmptyString(openai.judgeModel) ? { judgeModel: openai.judgeModel.trim() } : {}),
     }),

@@ -1,6 +1,6 @@
 {
   "name": "custom-memory-engine",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A memory layer for AI apps (Mem0-style), backed by Qdrant and OpenAI.",
   "type": "module",
   "exports": "./src/index.js",
@@ -32,7 +32,8 @@
     "eval:context": "node scripts/eval-context.js",
     "eval:perf": "node scripts/eval-perf.js",
     "eval:report": "node scripts/eval-full-report.js",
-    "eval:mem0-compare": "node scripts/eval-mem0-compare.js"
+    "eval:mem0-compare": "node scripts/eval-mem0-compare.js",
+    "eval:integration": "node scripts/eval-integration.js"
   },
   "keywords": [],
   "license": "ISC",

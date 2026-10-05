@@ -1,8 +1,5 @@
 import { DECIDER_ACTIONS, DECIDER_PROMPT } from './prompts.js';
 
-function warn(reason) {
-  console.warn(`[decider fallback] ${reason}`);
-}
 
 /** Action used when the model's answer for a fact cannot be used. */
 function fallbackFor(fact) {
@@ -27,10 +24,12 @@ function buildInput(facts, shortIds) {
  * Invalid model output never throws; it falls back (see fallbackFor) and is logged.
  * Exception: DELETE of an existing memory for an active fact becomes an UPDATE of that memory
  * with the fact text (also logged as a fallback).
- * deps.chat is the chat function of the engine's LLM client (createLlmClient).
+ * deps.chat is the engine's chat function. deps.logger: { warn(message, details) }; messages
+ * never contain fact or memory text (that goes in details), defaults to console.warn.
  */
-export async function decide(facts, candidates, { chat } = {}) {
+export async function decide(facts, candidates, { chat, logger = { warn: (message) => console.warn(message) } } = {}) {
   if (typeof chat !== 'function') throw new Error('decide: a chat function is required ({ chat }).');
+  const warn = (reason, details) => logger.warn(`[decider fallback] ${reason}`, details);
   // Short ids keep the prompt small and stop the model from mangling UUIDs.
   const shortIds = new Map(candidates.map((m, i) => [`m${i + 1}`, m]));
 
@@ -43,7 +42,7 @@ export async function decide(facts, candidates, { chat } = {}) {
 
   const raw = Array.isArray(response?.actions) ? response.actions : [];
   if (!Array.isArray(response?.actions)) {
-    warn(`response has no "actions" array: ${JSON.stringify(response)}`);
+    warn('response has no "actions" array', { response });
   }
 
   // First answer per fact index wins.
@@ -51,11 +50,11 @@ export async function decide(facts, candidates, { chat } = {}) {
   for (const a of raw) {
     const idx = Number(a?.fact);
     if (!Number.isInteger(idx) || idx < 0 || idx >= facts.length) {
-      warn(`action for unknown fact index ${JSON.stringify(a?.fact)}: ${JSON.stringify(a)}`);
+      warn(`action for unknown fact index ${JSON.stringify(a?.fact)}`, { action: a });
       continue;
     }
     if (byFact.has(idx)) {
-      warn(`fact ${idx} has more than one action, keeping the first: ${JSON.stringify(a)}`);
+      warn(`fact ${idx} has more than one action, keeping the first`, { action: a });
       continue;
     }
     byFact.set(idx, a);
@@ -65,7 +64,7 @@ export async function decide(facts, candidates, { chat } = {}) {
   return facts.map((fact, i) => {
     const a = byFact.get(i);
     const fallback = (reason) => {
-      warn(`fact ${i} "${fact.text}" (${fact.status}): ${reason}; using ${fallbackFor(fact).action}`);
+      warn(`fact ${i} (${fact.status}): ${reason}; using ${fallbackFor(fact).action}`, { factIndex: i, factText: fact.text, action: a });
       return { ...fallbackFor(fact), text: fact.text };
     };
 
@@ -87,7 +86,11 @@ export async function decide(facts, candidates, { chat } = {}) {
       if (!memoryId) return fallback('DELETE is only allowed for an ended fact');
       if (targeted.has(memoryId)) return fallback(`memory ${shortId} is already targeted by another action`);
       targeted.add(memoryId);
-      warn(`fact ${i} "${fact.text}" (${fact.status}): DELETE is only allowed for an ended fact; using UPDATE of ${shortId} with the fact text`);
+      warn(`fact ${i} (${fact.status}): DELETE is only allowed for an ended fact; using UPDATE of ${shortId} with the fact text`, {
+        factIndex: i,
+        factText: fact.text,
+        action: a,
+      });
       return { action: 'UPDATE', memoryId, text: fact.text };
     }
 
@@ -103,7 +106,7 @@ export async function decide(facts, candidates, { chat } = {}) {
 
     let text = typeof a.text === 'string' ? a.text.trim() : '';
     if (!text) {
-      warn(`fact ${i}: UPDATE without text; using the fact text`);
+      warn(`fact ${i}: UPDATE without text; using the fact text`, { factIndex: i, factText: fact.text, action: a });
       text = fact.text;
     }
     return { action, memoryId, text };

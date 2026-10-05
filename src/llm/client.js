@@ -75,3 +75,20 @@ export function createLlmClient({ apiKey, chatModel }) {
 
   return { openai, chat };
 }
+
+/**
+ * Wraps a caller-supplied chat function so it behaves like createLlmClient()'s chat().
+ * Contract: chat({ system, user, json, temperature, model }) returns the reply text, or the
+ * parsed object when json is true. A JSON string returned for json: true is parsed here.
+ */
+export function wrapInjectedChat(chat) {
+  return async function injectedChat(args) {
+    const result = await chat(args);
+    if (!args?.json || typeof result !== 'string') return result;
+    try {
+      return JSON.parse(result);
+    } catch (err) {
+      throw new Error(`chat(): injected chat returned invalid JSON (${err.message}).`);
+    }
+  };
+}

@@ -27,9 +27,18 @@ export function createVectorStore({ collection = config.collection } = {}) {
   return createStore({ qdrant: config.qdrant, embeddingDim: config.openai.embeddingDim, collection });
 }
 
+/**
+ * Logger for script-created engines. Scripts are dev tooling, so the fact text from `details`
+ * is printed too (the library's default logger never prints it). Uses console.warn, which
+ * eval scripts intercept to count "[decider fallback]" lines.
+ */
+export const scriptLogger = {
+  warn: (message, details) => console.warn(details?.factText ? `${message} [fact: "${details.factText}"]` : message),
+};
+
 /** An engine using this runtime's config and shared LLM client. */
 export function createMemoryEngine(options = {}) {
-  return createEngine({ config, llm, ...options });
+  return createEngine({ config, llm, logger: scriptLogger, ...options });
 }
 
 /** A raw Qdrant client, for collection admin in scripts (create/drop/list). */
